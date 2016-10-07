@@ -2,12 +2,11 @@
 %{
 open Ast
 %}
-%token <char> LETTER
 %token <string> NAME
 %token <string> VARS
 %token <int> INT
-%token <bool> BOOL
-%token FUNC
+%token <bool> TRUE
+%token <bool> FALSE
 %token PLUS MINUS TIMES DIV
 %token GT EQUALS AND NOT
 %token LPAREN RPAREN
@@ -15,7 +14,7 @@ open Ast
 %token FUNC GO
 %token SEMICOLON COMMA
 %token SEND NEWCHANNEL
-%token DECLARE OVERRIDE
+%token DECLARE ASSIGN
 %token WHILE
 %token IF ELSE
 %token RETURN
@@ -36,77 +35,84 @@ main:
     prog EOF                { $1 }
 ;
 prog:
-    proc block              { Prog($1, $2) }
+  | block                   { Prog([], $1)}
+  | procs block             { Prog($1, $2)}
 ;
+procs:
+    proc        { [$1] }
+  | proc procs  { $1 :: $2 }
 proc:
-    FUNC name LPAREN RPAREN block { [Proc($2, [], None, $5)] }
-  | FUNC name LPAREN param RPAREN block { [Proc($2, [], None, $6)]  }
-  | FUNC name LPAREN RPAREN dtype block {  [Proc($2, [], None, $6)] }
-  | FUNC name LPAREN param RPAREN dtype block {  [Proc($2, [], None, $7)] }
+    FUNC name LPAREN RPAREN block             { Proc($2, [], None, $5) }
+  | FUNC name LPAREN param RPAREN block       { Proc($2, $4, None, $6) }
+  | FUNC name LPAREN RPAREN dtype block       { Proc($2, [], Some($5), $6) }
+  | FUNC name LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), $7) }
 ;
 param:
-    vars dtype {}
-  | param COMMA vars dtype {}
+    param COMMA vars dtype { ($3, $4) :: $1 }
+  | vars dtype { [($1, $2)] }
 ;
 block:
-    LBRACE statement RBRACE {}
+    LBRACE statement RBRACE { $2 }
+;
 statement:
-    statement SEMICOLON statement {}
-  | GO block {}
-  | vars SEND aexp {}
-  | SEND vars {}
-  | vars DECLARE bexp {}
-  | vars DECLARE NEWCHANNEL {}
-  | vars OVERRIDE bexp {}
-  | WHILE bexp block {}
-  | IF bexp block ELSE block {}
-  | RETURN bexp {}
-  | name LPAREN arg RPAREN {}
-  | PRINT bexp {}
+    statement SEMICOLON statement { Seq($1, $3) }
+  | GO block { Go($2) }
+  | VARS SEND aexp { Transmit($1, $3) }
+  | SEND VARS { RcvStmt($2) }
+  | VARS DECLARE bexp { Decl($1, $3) }
+  | VARS DECLARE NEWCHANNEL { DeclChan($1)}
+  | VARS ASSIGN bexp { Assign($1, $3) }
+  | WHILE bexp block { While($2, $3) }
+  | IF bexp block ELSE block { ITE($2, $3, $5) }
+  | RETURN bexp { Return($2) }
+  | name LPAREN arg RPAREN { FuncCall($1, $3) }
+  | VARS LPAREN arg RPAREN { FuncCall($1, $3) }
+  | PRINT bexp { Print($2) }
 ;
 bexp:
-    cexp {}
-  | cexp AND bexp {}
+    cexp { $1 }
+  | cexp AND cexp { And($1, $3) }
 ;
 cexp:
-    cterm {}
-  | cterm EQUALS cexp {}
+    cterm { $1 }
+  | cterm EQUALS cterm { Eq($1, $3) }
 ;
 cterm:
-    aexp {}
-  | aexp GT aexp {}
+    aexp { $1 }
+  | aexp GT aexp { Gt($1, $3) }
 ;
 aexp:
-    term {}
-  | term PLUS aexp {}
-  | term MINUS aexp {}
+    term { $1 }
+  | term PLUS term { Plus($1, $3) }
+  | term MINUS term { Minus($1, $3) }
 ;
 term:
-    factor {}
-  | factor TIMES term {}
-  | factor DIV term {}
+    factor { $1 }
+  | factor TIMES factor { Times($1,$3) }
+  | factor DIV factor { Division($1,$3) }
 ;
 factor:
-    INT {}
-  | BOOL {}
-  | vars {}
-  | SEND vars {}
-  | NOT factor {}
-  | LPAREN bexp RPAREN {}
-  | name LPAREN arg RPAREN {}
+    INT { IConst($1) }
+  | TRUE { BConst($1) }
+  | FALSE { BConst($1) }
+  | VARS { Var($1) }
+  | SEND VARS { RcvExp($2) }
+  | NOT factor { Not($2) }
+  | LPAREN bexp RPAREN { $2 }
+  | name LPAREN arg RPAREN { FuncExp($1, $3) }
 ;
 arg:
-    bexp {}
-  | bexp COMMA arg {}
+    bexp { [$1] }
+  | bexp COMMA arg { [] }
 ;
 dtype:
-    INTTYPE {}
-  | BOOLTYPE {}
-  | CHANINTTYPE {}
+    INTTYPE { TyInt }
+  | BOOLTYPE { TyBool }
+  | CHANINTTYPE { TyChan(TyInt) }
 ;
 name:
-    NAME {}
+    NAME { $1 }
 ;
 vars:
-    VARS {}
+    VARS { Var($1) }
 ;
