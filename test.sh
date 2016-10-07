@@ -1,14 +1,11 @@
-./main "testcases/assign"
-./main "testcases/decl"
-./main "testcases/declchannel"
-./main "testcases/goblock"
-./main "testcases/print"
-./main "testcases/recv"
-./main "testcases/statements"
-./main "testcases/transmit"
-./main "testcases/while"
-./main "testcases/ifelse"
-./main "testcases/return"
-./main "testcases/funccall"
 # ./main "testcases/proc" # fails
-./main "testcases/exp"
+
+TESTCASES=./testcases/*
+for f in $TESTCASES
+do
+    if [ "$f" != "./testcases/proc" ]
+    then
+        # echo "$f: `./main $f`"
+        printf "%-30s `./main $f`\n" "$f"
+    fi
+done
