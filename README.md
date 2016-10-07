@@ -4,3 +4,11 @@ Compiler for mini-go!
 ## Notes
 How to disambiguate vars and name if we have a single-letter?
 - Lexer reads single letter and must decide if it is a vars or name
+
+## Test cases
+Some test cases are in the testcases folder.
+To run the tests:
+
+```
+make test
+```

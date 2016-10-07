@@ -204,3 +204,6 @@ depend: .depend
 	$(CAMLDEP) $(SMLIY) $(SMLIY:.ml=.mli) > .depend
 
 include .depend
+
+test:
+	./test.sh
