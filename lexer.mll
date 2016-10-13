@@ -57,7 +57,7 @@ rule token = parse
   | ';'            { SEMICOLON }
   | ','            { COMMA }
   | '='            { ASSIGN }
-  | vars as lxm { VARS lxm }
-  | name as lxm { NAME lxm }
+  | name as lxm { NAME(lxm) }
+  | vars as lxm { VARS(lxm) }
   | _              { raise (SyntaxError("Unexpected: " ^ Lexing.lexeme lexbuf)) }
   | eof            { EOF }

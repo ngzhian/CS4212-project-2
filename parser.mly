@@ -42,14 +42,14 @@ procs:
     proc        { [$1] }
   | proc procs  { $1 :: $2 }
 proc:
-    FUNC name LPAREN RPAREN block             { Proc($2, [], None, $5) }
-  | FUNC name LPAREN param RPAREN block       { Proc($2, $4, None, $6) }
-  | FUNC name LPAREN RPAREN dtype block       { Proc($2, [], Some($5), $6) }
-  | FUNC name LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), $7) }
+    FUNC NAME LPAREN RPAREN block             { Proc($2, [], None, $5) }
+  | FUNC NAME LPAREN param RPAREN block       { Proc($2, $4, None, $6) }
+  | FUNC NAME LPAREN RPAREN dtype block       { Proc($2, [], Some($5), $6) }
+  | FUNC NAME LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), $7) }
 ;
 param:
-    param COMMA vars dtype { ($3, $4) :: $1 }
-  | vars dtype { [($1, $2)] }
+    param COMMA NAME dtype { (Var($3), $4) :: $1 }
+  | NAME dtype { [(Var($1), $2)] }
 ;
 block:
     LBRACE statement RBRACE { $2 }
@@ -57,16 +57,16 @@ block:
 statement:
     statement SEMICOLON statement { Seq($1, $3) }
   | GO block { Go($2) }
-  | VARS SEND aexp { Transmit($1, $3) }
-  | SEND VARS { RcvStmt($2) }
-  | VARS DECLARE bexp { Decl($1, $3) }
-  | VARS DECLARE NEWCHANNEL { DeclChan($1)}
-  | VARS ASSIGN bexp { Assign($1, $3) }
+  | NAME SEND aexp { Transmit($1, $3) }
+  | SEND NAME { RcvStmt($2) }
+  | NAME DECLARE bexp { Decl($1, $3) }
+  | NAME DECLARE NEWCHANNEL { DeclChan($1)}
+  | NAME ASSIGN bexp { Assign($1, $3) }
   | WHILE bexp block { While($2, $3) }
   | IF bexp block ELSE block { ITE($2, $3, $5) }
   | RETURN bexp { Return($2) }
-  | name LPAREN arg RPAREN { FuncCall($1, $3) }
-  | VARS LPAREN arg RPAREN { FuncCall($1, $3) }
+  | NAME LPAREN arg RPAREN { FuncCall($1, $3) }
+  | NAME LPAREN arg RPAREN { FuncCall($1, $3) }
   | PRINT bexp { Print($2) }
 ;
 bexp:
@@ -95,11 +95,11 @@ factor:
     INT { IConst($1) }
   | TRUE { BConst($1) }
   | FALSE { BConst($1) }
-  | VARS { Var($1) }
-  | SEND VARS { RcvExp($2) }
+  | NAME { Var($1) }
+  | SEND NAME { RcvExp($2) }
   | NOT factor { Not($2) }
   | LPAREN bexp RPAREN { $2 }
-  | name LPAREN arg RPAREN { FuncExp($1, $3) }
+  | NAME LPAREN arg RPAREN { FuncExp($1, $3) }
 ;
 arg:
     bexp { [$1] }
@@ -109,9 +109,6 @@ dtype:
     INTTYPE { TyInt }
   | BOOLTYPE { TyBool }
   | CHANINTTYPE { TyChan(TyInt) }
-;
-name:
-    NAME { $1 }
 ;
 vars:
     VARS { Var($1) }

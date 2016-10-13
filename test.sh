@@ -3,9 +3,6 @@
 TESTCASES=./testcases/*
 for f in $TESTCASES
 do
-    if [ "$f" != "./testcases/proc" ]
-    then
-        # echo "$f: `./main $f`"
-        printf "%-30s `./main $f`\n" "$f"
-    fi
+    # echo "$f: `./main $f`"
+    printf "%-30s `./main $f`\n" "$f"
 done
