@@ -15,5 +15,5 @@ fi
 for f in $TESTCASES
 do
     # echo "$f: `./main $f`"
-    printf "%-40s `./main $1 $f`\n" "$f"
+    printf "%-50s `./main $1 $f`\n" "$f"
 done
