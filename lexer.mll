@@ -47,8 +47,7 @@ rule token = parse
   | '-'            { MINUS }
   | '*'            { TIMES }
   | '/'            { DIV }
-  | '/'            { DIV }
-  | '>'            { DIV }
+  | '>'            { GT }
   | '!'            { NOT }
   | '('            { LPAREN }
   | ')'            { RPAREN }
