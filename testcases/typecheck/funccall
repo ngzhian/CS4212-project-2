@@ -1,0 +1,17 @@
+func a() {
+    return 1
+}
+func b(x int) {
+    return x
+}
+func c(x int) int {
+    return x
+}
+{
+    a();
+    x := a();
+    b(1);
+    c(1);
+    x = 1 + c(1);
+    return 1
+}

@@ -1,0 +1,5 @@
+{
+    x := newChannel;
+    z := <-x;
+    z := 1
+}

@@ -1,0 +1,6 @@
+func a(x int) int {
+    return x
+}
+{
+    a(true)
+}

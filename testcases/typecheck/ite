@@ -1,0 +1,51 @@
+{
+    if true {
+        return 1
+    } else {
+        return 2
+    };
+    if !true {
+        return 1
+    } else {
+        return 2
+    };
+    if 3 > 2 {
+        return 1
+    } else {
+        return 2
+    };
+    if 3 / 2 == 1 {
+        return 1
+    } else {
+        return 2
+    };
+    if 3 * 2 == 1 {
+        return 1
+    } else {
+        return 2
+    };
+    if 3 + 2 == 1 {
+        return 1
+    } else {
+        return 2
+    };
+    if 3 - 2 == 1 {
+        return 1
+    } else {
+        return 2
+    };
+
+    x := 1;
+    if x == 2 {
+        return 1
+    } else {
+        return 2
+    };
+
+    y := true;
+    if y {
+        return 1
+    } else {
+        return 2
+    }
+}

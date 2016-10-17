@@ -1,0 +1,7 @@
+func a(x int) int {
+    return x
+}
+{
+    x := true;
+    x = a(1)
+}
