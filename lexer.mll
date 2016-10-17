@@ -18,7 +18,11 @@ let digit = ['0'-'9']
 let integer = digit+
 let letter = ['a'-'z']
 let vars = letter (digit|letter)*
-let name = letter+
+(* Technically, name can only contain letters, but we leave this
+ * to the type checker in order to simplify parsing.
+ * TODO: check for name validity in parsing step
+ * *)
+let name = letter (digit|letter)*
 let white = [' ' '\t']
 let newline = '\r' | '\n' | "\r\n"
 
@@ -57,6 +61,5 @@ rule token = parse
   | ','            { COMMA }
   | '='            { ASSIGN }
   | name as lxm { NAME(lxm) }
-  | vars as lxm { VARS(lxm) }
   | _              { raise (SyntaxError("Unexpected: " ^ Lexing.lexeme lexbuf)) }
   | eof            { EOF }

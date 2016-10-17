@@ -1,0 +1,6 @@
+func ab1(x int) int {
+    return x
+}
+{
+    a(1)
+}

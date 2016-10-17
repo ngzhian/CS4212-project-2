@@ -157,8 +157,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
            (match (typeCheckStmt env s1, typeCheckStmt env s2) with
              | (Some _, Some _) -> Some env
              | _ -> None)
-       | Some x -> let _ = printf "failed this %s" (type_to_string x) in None
-       | _ -> let _ = printf "failed uknown" in None)
+       | _ -> None)
   | Return e -> Some env
   | FuncCall (v, ps) ->
       (match (lookup v env) with
