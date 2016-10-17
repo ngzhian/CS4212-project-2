@@ -65,7 +65,7 @@ statement:
   | WHILE bexp block { While($2, $3) }
   | IF bexp block ELSE block { ITE($2, $3, $5) }
   | RETURN bexp { Return($2) }
-  | NAME LPAREN arg RPAREN { FuncCall($1, $3) }
+  | NAME LPAREN RPAREN { FuncCall($1, []) }
   | NAME LPAREN arg RPAREN { FuncCall($1, $3) }
   | PRINT bexp { Print($2) }
 ;
@@ -99,6 +99,7 @@ factor:
   | SEND NAME { RcvExp($2) }
   | NOT factor { Not($2) }
   | LPAREN bexp RPAREN { $2 }
+  | NAME LPAREN RPAREN { FuncExp($1, []) }
   | NAME LPAREN arg RPAREN { FuncExp($1, $3) }
 ;
 arg:
