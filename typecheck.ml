@@ -14,12 +14,12 @@ let type_to_string ty =
     | TyChan _ -> "TyChan"
     | TyFunc _ -> "TyFunc"
 
-let to_string l =
-    List.map (fun (a, b) -> a ^ ": " ^ (type_to_string b)) l
-    |> String.concat ", "
 let rec env_to_string env =
+    let name_type ctx = (
+      match ctx with
+      | (a, b) -> a ^ ": " ^ (type_to_string b)) in
     match env with
-    | Env ps -> to_string ps
+    | Env ps -> List.map name_type ps |> String.concat ", "
 
 (* equality among types *)
 let rec eqTy t1 t2 = match (t1,t2) with
@@ -39,24 +39,19 @@ let rec bothInt mt1 mt2 = match (mt1, mt2) with
 let rec paramsMatch inferredTypes declaredTypes =
     match (inferredTypes, declaredTypes) with
     | [], [] -> true
-    | Some t1::r1, h2::r2 -> eqTy t1 h2 && paramsMatch r1 r2
+    | (Some t1)::r1, h2::r2 -> eqTy t1 h2 && paramsMatch r1 r2
     | _ -> false
 
-(*
-We assume that the type environment is represented as a list of pairs of variables and types
-where variables are represented as strings.
-
-Here's a convenience function which lookups if there's a binding for a variable.
-It's actual type is actually slightly more general:
-'a -> ('a * 'b) list -> 'b option
-
- *)
-let lookup el env =
+(* Lookup the type of a var in the environment *)
+let lookup var env =
     match env with
     | Env lst ->
-            try (Some (snd (List.find (fun (el2,_) -> el = el2) lst)))
-            with
-            | Not_found -> None
+        try
+          (Some (snd (List.find (fun (el2,_) -> var = el2) lst)))
+        with
+        | Not_found -> None
+
+(* Add binding v : t to environment *)
 let add v t env =
     match env with
     | Env lst -> Env ((v, t) :: lst)
@@ -70,11 +65,11 @@ let rec inferTyExp env e =
         (match (inferTyExp env a, inferTyExp env b) with
          | (Some TyBool, Some TyBool) -> Some TyBool
          | _ -> None)
-    | Eq (a, b) -> (* both exp must have same types *)
+    | Eq (a, b) -> (* both exp must have same types, exp type is TyBool *)
         (match (inferTyExp env a, inferTyExp env b) with
          | (Some ta, Some tb) -> if (eqTy ta tb) then (Some TyBool) else None
          | _ -> None)
-    | Gt (a, b) ->
+    | Gt (a, b) -> (* both exp must be int, but the exp type is TyBool *)
         (match (inferTyExp env a, inferTyExp env b) with
          | (Some TyInt, Some TyInt) -> Some TyBool
          | _ -> None)
@@ -88,18 +83,15 @@ let rec inferTyExp env e =
          | _ -> None)
     | RcvExp a -> lookup a env
     | Var a -> lookup a env
-    | FuncExp (n, ps) ->
-        (match lookup n env with
+    | FuncExp (name, ps) ->
+        (match lookup name env with
          | Some (TyFunc (params, returnType)) ->
                  let inferred = List.map (inferTyExp env) ps in
                  if paramsMatch inferred params then Some returnType else None
          | _ -> None)
 
-
-  (* add remaining cases *)               
-
 (* Implementation of G | (stmt : Cmd | G) where we simply skip Cmd and as above
-  use 'option' to report failure 
+  use 'option' to report failure
 
   As discussed, there's a bit of design space when it comes to 'nested' type declarations.
   The below is just a sketch.
@@ -167,15 +159,16 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
          | _ -> None)
   | Print e -> Some env
 
-(* disallow funcs with same name? *)
 let collectFn env proc = match proc with
-  | Proc (fn, params, Some ret, body) -> (
-      let pt = List.map (fun (e, t) -> t) params in
-      Some ((fn, TyFunc (pt, ret)) :: env))
-  | Proc (fn, params, None, body) -> (
-      let pt = List.map (fun (e, t) -> t) params in
-      (* default return type to TyInt, it might be void *)
-      Some ((fn, TyFunc (pt, TyInt)) :: env))
+  | Proc (fn, params, ret, body) ->
+      match lookup fn env with
+      | Some (_) -> None (* function was already declared *)
+      | _ ->
+          let pt = List.map (fun (e, t) -> t) params in
+          (match ret with
+           | Some rt -> Some (add fn (TyFunc (pt, rt)) env)
+           (* default return type to TyInt, it might be void *)
+           | None -> Some (add fn (TyFunc (pt, TyInt)) env))
 
 let rec collectFns env procs = match procs with
   | p::rest ->
@@ -204,7 +197,8 @@ let rec typeCheckParams env params = match params with
  * The env returns is the original env that was passed in with this
  * function definition added.
  * *)
-let typeCheckProc env proc = match proc with
+let typeCheckProc env proc =
+  match proc with
   (* need to type check return value *)
   (* are functions recursive? *)
   | Proc (fn, params, ret, body) ->
@@ -225,9 +219,12 @@ let rec typeCheckProcs env procs = match procs with
 
 let typecheck prog = match prog with
   | Prog (procs, stmt) ->
-      (match typeCheckProcs (Env []) procs with
-       | Some newEnv -> typeCheckStmt newEnv stmt
-       | None -> None)
+      match collectFns (Env []) procs with
+      | Some initEnv ->
+        (match typeCheckProcs initEnv procs with
+         | Some newEnv -> typeCheckStmt newEnv stmt
+         | None -> None)
+      | None -> None
 
 (*
 

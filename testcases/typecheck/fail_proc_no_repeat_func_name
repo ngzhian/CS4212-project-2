@@ -1,0 +1,9 @@
+func a(x int) int {
+    return x
+}
+func a(x int) int {
+    return x
+}
+{
+    return 1
+}
