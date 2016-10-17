@@ -15,5 +15,6 @@ func e() int {
 }
 
 {
+    a();
     return 1
 }
