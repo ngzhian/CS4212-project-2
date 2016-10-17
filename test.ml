@@ -1,6 +1,7 @@
 open Lexer
 open Lexing
 open Printf
+open Typecheck
 
 exception Error of string
 
@@ -18,20 +19,28 @@ let parse_with_error lexbuf =
                 fprintf stderr "%a: syntax error\n" print_position lexbuf;
                                           exit (-1)
 
-let rec parse_and_print lexbuf =
+let rec parse_and_print lexbuf tc =
     try
-        parse_with_error lexbuf;
-        printf "SUCCESS\n"
+        let prog = parse_with_error lexbuf in
+        if tc
+        then
+            match typecheck prog with
+            | Some _ -> printf "TC SUCCESS"
+            | _ -> printf "TC FAIL"
+        else
+          printf "SUCCESS\n"
     with SyntaxError _ ->
         printf "FAIL\n"
 
-let loop filename () =
+let loop filename tc () =
   let inx = open_in filename in
   let lexbuf = Lexing.from_channel inx in
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-  parse_and_print lexbuf;
+  parse_and_print lexbuf tc;
   close_in inx
 
 (* part 2 *)
 let () =
-    loop Sys.argv.(1) ()
+    if String.equal Sys.argv.(1) "-t"
+    then loop Sys.argv.(2) true ()
+    else loop Sys.argv.(1) false ()

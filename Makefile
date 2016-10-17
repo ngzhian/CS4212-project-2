@@ -69,7 +69,7 @@
 #
 # The Caml sources (including camlyacc and camllex source files)
 
-SOURCES = ast.ml parser.mly lexer.mll test.ml
+SOURCES = ast.ml parser.mly lexer.mll typecheck.ml test.ml
 
 # The executable file to generate
 
@@ -205,5 +205,8 @@ depend: .depend
 
 include .depend
 
-test:
+test-parser-only:
 	./test.sh
+test-typecheck-only:
+	./test.sh -t
+test:: test-parser-only test-typecheck-only

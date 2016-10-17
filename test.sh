@@ -3,7 +3,7 @@
 # ./test.sh -t
 # to run parsing tests and type checks
 
-if [[ $1 -eq "-t" ]]
+if [[ "$1" == "-t" ]]
 then
     TESTCASES=./testcases/typecheck/*
     echo "Typechecking..."
