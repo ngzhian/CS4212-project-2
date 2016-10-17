@@ -10,5 +10,8 @@ Some test cases are in the testcases folder.
 To run the tests:
 
 ```
-make test
+make # build files
+make test # for both parse test and type checks
+make test-parser-only # for parser only
+make test-typecheck-only # for typecheck only
 ```
