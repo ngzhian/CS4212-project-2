@@ -177,19 +177,21 @@ let rec collectFns env procs = match procs with
        | _ -> None)
   | [] -> Some env
 
-(* Type checks a function declaration param.
- * Ensures that param names are names (no digits).
+(* Type check a list of params in function declaration.
+ * Param names cannot be repeated.
  * *)
-let typeCheckParam env param = match param with
-  | (Var x, t) -> if Str.string_match (Str.regexp "[0-9]") x 0 then None else Some env
-  | _ -> Some env
-
-(* Type check a list of params in function declaration *)
-let rec typeCheckParams env params = match params with
-  | p::rest ->
-      (match typeCheckParam env p with
-       | Some newEnv -> typeCheckParams newEnv rest
-       | None -> None)
+let rec typeCheckParams env params =
+  let validParamName n = not (Str.string_match (Str.regexp "[0-9]") n 0) in
+  match params with
+  | (Var x, t)::rest ->
+      (match validParamName x with
+      | false -> None
+      | true ->
+          (match lookup x env with
+           | Some (TyFunc _) | None -> typeCheckParams env rest
+           | Some _ -> None
+          ))
+  | _::rest -> None
   | [] -> Some env
 
 (* Type checks a proc and its body.
@@ -197,18 +199,23 @@ let rec typeCheckParams env params = match params with
  * The env returns is the original env that was passed in with this
  * function definition added.
  * *)
-let typeCheckProc env proc =
-  match proc with
-  (* need to type check return value *)
-  (* are functions recursive? *)
-  | Proc (fn, params, ret, body) ->
-      (* check that param names are valid names *)
-      (match typeCheckParams env params with
-       | Some newEnv ->
-           (match typeCheckStmt newEnv body with
-            | Some _ -> Some (add fn (TyFunc (List.map (fun (e, t) -> t) params, TyInt)) env)
-            | None -> None)
+let typeCheckProc env (Proc (fn, params, ret, body)) =
+  (* TODO need to type check return value *)
+  (* TODO are functions recursive? *)
+  (* check that param names are valid names *)
+  match typeCheckParams env params with
+  | Some paramsEnv ->
+      (* type check stmt with paramsEnv containing params *)
+      (match typeCheckStmt paramsEnv body with
+       | Some _ ->
+           (let retType =
+             (match ret with
+              | Some ty -> ty
+              | None -> TyInt) in
+           let fnType = TyFunc ((List.map (fun (e, t) -> t) params), retType) in
+           Some (add fn fnType env))
        | None -> None)
+  | None -> None
 
 let rec typeCheckProcs env procs = match procs with
   | p::rest ->

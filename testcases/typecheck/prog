@@ -13,7 +13,6 @@ func d(a int, b int) int {
 func e() int {
     return 1
 }
-
 {
     return 1
 }
