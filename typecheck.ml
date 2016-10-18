@@ -181,48 +181,42 @@ let rec collectFns env procs = match procs with
   | [] -> Some env
 
 (* Type check a list of params in function declaration.
- * Param names cannot be repeated.
+ * Param names cannot be repeated, cannot contain 0-9.
+ * Returns an env with all function params.
  * *)
-(* TODO params are collected in a separate env for checking, the final env returend from params type check should be used to typecheck stmt*)
 let rec typeCheckParams paramEnv params =
   let validParamName n = not (Str.string_match (Str.regexp "[0-9]") n 0) in
   match params with
   | (Var x, t)::rest ->
-      (match validParamName x with
-      | false -> None
-      | true ->
-          (match lookup x paramEnv with
-           (* param names cannot be repeated *)
-           | Some _ -> None
-           | None -> typeCheckParams (add x t paramEnv) rest
-          ))
+      (match (validParamName x, lookup x paramEnv) with
+      | false, _ -> None
+       (* param names cannot be repeated *)
+      | true, Some _ -> None
+      | true, None -> typeCheckParams (add x t paramEnv) rest)
+  (* param can only be vars *)
   | _::rest -> None
   | [] -> Some paramEnv
 
 (* Type checks a proc and its body.
- * Collects all params into a new env, then type checks body with new env.
- * The env returns is the original env that was passed in with this
- * function definition added.
+ * Type checks all params, then type checks body with the params env
+ * merged with the surrouding env.
+ * Returns the original env that was passed in.
  * *)
 let typeCheckProc env (Proc (fn, params, ret, body)) =
   (* TODO need to type check return value *)
-  (* TODO are functions recursive? *)
-  (* check that param names are valid names *)
-  match typeCheckParams (Env []) params with
+  let mergeEnv (Env a) (Env b) = Env (a@b) in
+  let emptyEnv = Env [] in
+  match typeCheckParams emptyEnv params with
   | Some paramsEnv ->
-      let mergedEnv =
-        (match (paramsEnv, env) with
-        | Env a, Env b -> Env (a @ b)
-        ) in
       (* type check stmt with paramsEnv containing params *)
-      (match typeCheckStmt mergedEnv body with
+      (match typeCheckStmt (mergeEnv paramsEnv env) body with
        | Some _ -> Some env
        | None -> None)
   | None -> None
 
 (* All procs are assumed to be recursive, because the env
  * we use to typecheck contains all function definitions
- * that have already been collecte
+ * that have already been collected.
  * *)
 let rec typeCheckProcs env procs = match procs with
   | p::rest ->
@@ -231,14 +225,14 @@ let rec typeCheckProcs env procs = match procs with
        | _ -> None)
   | [] -> Some env
 
-let typecheck prog = match prog with
-  | Prog (procs, stmt) ->
-      match collectFns (Env []) procs with
-      | Some initEnv ->
-        (match typeCheckProcs initEnv procs with
-         | Some newEnv -> typeCheckStmt newEnv stmt
-         | None -> None)
-      | None -> None
+(* Top level type checker for the entire prog *)
+let typecheck (Prog (procs, stmt)) =
+  match collectFns (Env []) procs with
+  | Some initEnv ->
+      (match typeCheckProcs initEnv procs with
+       | Some newEnv -> typeCheckStmt newEnv stmt
+       | None -> None)
+  | None -> None
 
 (*
 
