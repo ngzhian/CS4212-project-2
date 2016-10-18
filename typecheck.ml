@@ -4,19 +4,38 @@ open Str
 
 (* the type env is a list of function signature
  * and a list of context (vars and their types) *)
-type env = Env of (string * types) list
+type env = Env of ((string * types) list) list
+
+let newBlock (Env lst) =
+  match lst with
+  | [] -> Env ([])
+  | xs -> Env ([]::xs)
 
 (* Add binding v : t to environment *)
-let add v t (Env lst) = Env ((v, t) :: lst)
+let add v t (Env lst) =
+  match lst with
+  | [] -> Env ([[(v,t)]])
+  | x::xs -> Env (((v,t)::x)::xs)
 
 let initEnv () = Env []
 
-(* Lookup the type of a var in the environment *)
-let lookup (Env lst) var =
+let lu lst var =
     try
       (Some (snd (List.find (fun (el2,_) -> var = el2) lst)))
     with
     | Not_found -> None
+
+let lookupImmd (Env lst) var = match lst with
+  | [] -> None
+  | []::xs -> None
+  | l::xs -> lu l var
+
+(* Lookup the type of a var in the environment *)
+let rec lookup (Env lst) var =
+  match lst with
+  | [] -> None
+  | []::xs -> lookup (Env xs) var
+  | x::xs -> lu x var
 
 let mergeEnv (Env a) (Env b) = Env (a@b)
 
@@ -32,7 +51,9 @@ let rec env_to_string (Env ps) =
     let name_type ctx = (
       match ctx with
       | (a, b) -> a ^ ": " ^ (type_to_string b)) in
-    List.map name_type ps |> String.concat ", "
+    let mm p = List.map (fun (l) -> (List.map name_type l
+      |> String.concat ", " )) p in
+    String.concat "; " (mm ps)
 
 (* equality among types *)
 let rec eqTy t1 t2 = match (t1,t2) with
@@ -102,7 +123,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
        | None -> None
        | Some e2 -> typeCheckStmt e2 s2)
   | Go s ->
-      (match (typeCheckStmt env s) with
+      (match (typeCheckStmt (newBlock env) s) with
        | Some _ -> Some env
        | None -> None)
   | Transmit (ch, e) ->
@@ -121,7 +142,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
    * Right now there is no notion of outer/inner block, there is only 1 flat env.
    * *)
   | Decl (v, e) ->
-      (match (lookup env v) with
+      (match (lookupImmd env v) with
        (* Decl only works if v was not previously declared *)
        | None -> (
            match (inferTyExp env e) with
@@ -141,14 +162,14 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
   | While (e, s) ->
       (match (inferTyExp env e) with
        | Some TyBool ->
-           (match typeCheckStmt env s with
+           (match typeCheckStmt (newBlock env) s with
             | Some e2 -> Some env
             | None -> None)
        | _ -> None)
   | ITE (e, s1 ,s2) ->
       (match (inferTyExp env e) with
        | Some TyBool ->
-           (match (typeCheckStmt env s1, typeCheckStmt env s2) with
+           (match (typeCheckStmt (newBlock env) s1, typeCheckStmt (newBlock env) s2) with
              | (Some _, Some _) -> Some env
              | _ -> None)
        | _ -> None)
@@ -237,7 +258,7 @@ let typecheck (Prog (procs, stmt)) =
 
 (*
 
-What's still missing are implementations for 
+What's still missing are implementations for
 
 (1) collection of type signatures from functions (procedures)
 
@@ -245,4 +266,4 @@ What's still missing are implementations for
 
 (3) type checking of the main program.
 
- *)   
+ *)
