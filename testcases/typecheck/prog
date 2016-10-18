@@ -2,10 +2,10 @@ func a() {
     return 1
 }
 func b(a int) {
-    return 1
+    return a
 }
 func c(a int, b int) {
-    return 1
+    return b
 }
 func d(a int, b int) int {
     return 1
