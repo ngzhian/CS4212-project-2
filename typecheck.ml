@@ -6,6 +6,20 @@ open Str
  * and a list of context (vars and their types) *)
 type env = Env of (string * types) list
 
+(* Add binding v : t to environment *)
+let add v t (Env lst) = Env ((v, t) :: lst)
+
+let initEnv () = Env []
+
+(* Lookup the type of a var in the environment *)
+let lookup (Env lst) var =
+    try
+      (Some (snd (List.find (fun (el2,_) -> var = el2) lst)))
+    with
+    | Not_found -> None
+
+let mergeEnv (Env a) (Env b) = Env (a@b)
+
 (* Helper to get string representation of types *)
 let type_to_string ty =
     match ty with
@@ -14,12 +28,11 @@ let type_to_string ty =
     | TyChan _ -> "TyChan"
     | TyFunc _ -> "TyFunc"
 
-let rec env_to_string env =
+let rec env_to_string (Env ps) =
     let name_type ctx = (
       match ctx with
       | (a, b) -> a ^ ": " ^ (type_to_string b)) in
-    match env with
-    | Env ps -> List.map name_type ps |> String.concat ", "
+    List.map name_type ps |> String.concat ", "
 
 (* equality among types *)
 let rec eqTy t1 t2 = match (t1,t2) with
@@ -41,20 +54,6 @@ let rec paramsMatch inferredTypes declaredTypes =
     | [], [] -> true
     | (Some t1)::r1, h2::r2 -> eqTy t1 h2 && paramsMatch r1 r2
     | _ -> false
-
-(* Lookup the type of a var in the environment *)
-let lookup var env =
-    match env with
-    | Env lst ->
-        try
-          (Some (snd (List.find (fun (el2,_) -> var = el2) lst)))
-        with
-        | Not_found -> None
-
-(* Add binding v : t to environment *)
-let add v t env =
-    match env with
-    | Env lst -> Env ((v, t) :: lst)
 
 (* Implementation of G |- exp : t where we use 'option' to report failure *)
 let rec inferTyExp env e =
@@ -81,10 +80,10 @@ let rec inferTyExp env e =
         (match (inferTyExp env a) with
          | Some TyBool -> Some TyBool
          | _ -> None)
-    | RcvExp a -> lookup a env
-    | Var a -> lookup a env
+    | RcvExp a -> lookup env a
+    | Var a -> lookup env a
     | FuncExp (name, ps) ->
-        (match lookup name env with
+        (match lookup env name with
          | Some (TyFunc (params, returnType)) ->
                  let inferred = List.map (inferTyExp env) ps in
                  if paramsMatch inferred params then Some returnType else None
@@ -107,7 +106,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
        | Some _ -> Some env
        | None -> None)
   | Transmit (ch, e) ->
-      (match (lookup ch env) with
+      (match (lookup env ch) with
        | Some (TyChan _) ->
          (* according to tips, e should always be an int *)
          (match inferTyExp env e with
@@ -115,14 +114,14 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
           | _ -> None)
        | _ -> None)
   | RcvStmt ch ->
-      (match (lookup ch env) with
+      (match (lookup env ch) with
        | Some (TyChan t1) -> Some env
        | _ -> None)
   (* TODO: Your compiler ought to support redeclarations when moving from an outer to an inner block. It is your choice if you want to support redeclarations within the same block.
    * Right now there is no notion of outer/inner block, there is only 1 flat env.
    * *)
   | Decl (v, e) ->
-      (match (lookup v env) with
+      (match (lookup env v) with
        (* Decl only works if v was not previously declared *)
        | None -> (
            match (inferTyExp env e) with
@@ -133,7 +132,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
   | DeclChan v ->
       Some (add v (TyChan TyInt) env)
   | Assign (v,e) ->
-      (match (lookup v env) with
+      (match (lookup env v) with
        | None -> None (* Unknown variable *)
        | Some t1 -> let t2 = inferTyExp env e in
            (match t2 with
@@ -158,7 +157,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
        | None -> None
        | Some _ -> Some env)
   | FuncCall (v, ps) ->
-      (match (lookup v env) with
+      (match (lookup env v) with
          | Some (TyFunc (params, _)) ->
                  let inferred = List.map (inferTyExp env) ps in
                  if paramsMatch inferred params then Some env else None
@@ -167,7 +166,7 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
 
 let collectFn env proc = match proc with
   | Proc (fn, params, ret, body) ->
-      match lookup fn env with
+      match lookup env fn with
       | Some (_) -> None (* function was already declared *)
       | _ ->
           let pt = List.map (fun (e, t) -> t) params in
@@ -191,7 +190,7 @@ let rec typeCheckParams paramEnv params =
   let validParamName n = not (Str.string_match (Str.regexp "[0-9]") n 0) in
   match params with
   | (Var x, t)::rest ->
-      (match (validParamName x, lookup x paramEnv) with
+      (match (validParamName x, lookup paramEnv x) with
       | false, _ -> None
        (* param names cannot be repeated *)
       | true, Some _ -> None
@@ -207,8 +206,7 @@ let rec typeCheckParams paramEnv params =
  * *)
 let typeCheckProc env (Proc (fn, params, ret, body)) =
   (* TODO need to type check return value *)
-  let mergeEnv (Env a) (Env b) = Env (a@b) in
-  let emptyEnv = Env [] in
+  let emptyEnv = initEnv () in
   match typeCheckParams emptyEnv params with
   | Some paramsEnv ->
       (* type check stmt with paramsEnv containing params *)
@@ -230,7 +228,7 @@ let rec typeCheckProcs env procs = match procs with
 
 (* Top level type checker for the entire prog *)
 let typecheck (Prog (procs, stmt)) =
-  match collectFns (Env []) procs with
+  match collectFns (initEnv ()) procs with
   | Some initEnv ->
       (match typeCheckProcs initEnv procs with
        | Some newEnv -> typeCheckStmt newEnv stmt
