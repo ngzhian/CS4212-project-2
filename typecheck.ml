@@ -118,6 +118,9 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
       (match (lookup ch env) with
        | Some (TyChan t1) -> Some env
        | _ -> None)
+  (* TODO: Your compiler ought to support redeclarations when moving from an outer to an inner block. It is your choice if you want to support redeclarations within the same block.
+   * Right now there is no notion of outer/inner block, there is only 1 flat env.
+   * *)
   | Decl (v, e) ->
       (match (lookup v env) with
        (* Decl only works if v was not previously declared *)
