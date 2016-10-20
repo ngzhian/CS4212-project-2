@@ -1,0 +1,6 @@
+func foo() int {
+    return true
+}
+{
+    foo()
+}

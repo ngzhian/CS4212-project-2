@@ -220,6 +220,13 @@ let rec typeCheckParams paramEnv params =
   | _::rest -> None
   | [] -> Some paramEnv
 
+let rec typeCheckFunctionBody env stmt rt =
+    (match stmt with
+     | Return x -> (
+         let xt = inferTyExp env x in
+         if xt = rt then Some env else None)
+     | _ -> typeCheckFunctionBody env stmt rt)
+
 (* Type checks a proc and its body.
  * Type checks all params, then type checks body with the params env
  * merged with the surrouding env.
@@ -232,7 +239,10 @@ let typeCheckProc env (Proc (fn, params, ret, body)) =
   | Some paramsEnv ->
       (* type check stmt with paramsEnv containing params *)
       (match typeCheckStmt (mergeEnv paramsEnv env) body with
-       | Some _ -> Some env
+       | Some _ -> (
+           match typeCheckFunctionBody (mergeEnv paramsEnv env) body ret with
+           | Some _ -> Some env
+           | None -> None)
        | None -> None)
   | None -> None
 

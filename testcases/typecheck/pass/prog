@@ -1,10 +1,10 @@
-func a() {
+func a() int {
     return 1
 }
-func b(a int) {
+func b(a int) int {
     return a
 }
-func c(a int, b int) {
+func c(a int, b int) int {
     return b
 }
 func d(a int, b int) int {

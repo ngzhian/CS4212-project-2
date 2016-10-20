@@ -1,14 +1,13 @@
-func a() {
+func a() int {
     return 1
 }
-func b(x int) {
+func b(x int) int {
     return x
 }
 func c(x int) int {
     return x
 }
 {
-    a();
     x := a();
     b(1);
     c(1);
