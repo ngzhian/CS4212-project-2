@@ -21,6 +21,7 @@ and stmt = Seq of stmt * stmt
           | Return of exp
           | FuncCall of string * (exp list)
           | Print of exp
+          | Skip
           
 and exp = And of exp * exp
          | Eq of exp * exp

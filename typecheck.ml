@@ -118,6 +118,7 @@ let rec inferTyExp env e =
 
 *)
 let rec typeCheckStmt (env : env) stmt = match stmt with
+  | Skip -> Some env
   | Seq (s1, s2) ->
       (match typeCheckStmt env s1 with
        | None -> None
