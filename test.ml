@@ -2,6 +2,7 @@ open Lexer
 open Lexing
 open Printf
 open Typecheck
+open Normalize
 
 exception Error of string
 
@@ -25,12 +26,22 @@ let rec parse_and_print lexbuf tc =
     if tc
     then
       match typecheck prog with
-      | Some _ -> printf "TC SUCCESS"
+      | Some _ -> let _ = normalizeProg prog in printf "TC SUCCESS"
       | _ -> printf "TC FAIL"
     else
       printf "SUCCESS\n"
   with SyntaxError _ ->
     printf "FAIL\n"
+
+let parse_tc_normalize lexbuf =
+  try
+    let prog = parse_with_error lexbuf in
+    match typecheck prog with
+    | Some _ ->
+        Some (normalizeProg prog)
+    | _ -> None
+  with SyntaxError _ ->
+    None
 
 let loop filename tc () =
   let inx = open_in filename in

@@ -69,7 +69,7 @@
 #
 # The Caml sources (including camlyacc and camllex source files)
 
-SOURCES = ast.ml parser.mly lexer.mll typecheck.ml test.ml
+SOURCES = ast.ml parser.mly lexer.mll typecheck.ml normalize.ml irc.ml genir.ml test.ml
 
 # The executable file to generate
 
