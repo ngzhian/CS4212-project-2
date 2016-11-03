@@ -52,6 +52,6 @@ let loop filename tc () =
 
 (* part 2 *)
 let () =
-  if String.equal Sys.argv.(1) "-t"
+  if Sys.argv.(1) = "-t"
   then loop Sys.argv.(2) true ()
   else loop Sys.argv.(1) false ()

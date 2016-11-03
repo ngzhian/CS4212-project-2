@@ -1,4 +1,4 @@
-# CS4212-project-2
+# CS4212 Project 2 [![Build Status](https://travis-ci.org/burnflare/CS4212-project-2.svg?branch=master)](https://travis-ci.org/burnflare/CS4212-project-2)
 Compiler for mini-go!
 
 ## Notes
