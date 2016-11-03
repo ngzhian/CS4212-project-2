@@ -2,7 +2,7 @@
 OPAM_DEPENDS="ocamlfind ounit re"
 
 opam init -a
-opam install ${OPAM_DEPENDS}
+opam install ${OPAM_DEPENDS} -y
 eval `opam config env -y`
 
 make
