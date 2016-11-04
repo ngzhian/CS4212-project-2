@@ -92,7 +92,7 @@ let rec normalizeStmt s = match s with
 
 
 let normalizeProc p = match p with
-    Proc (x, args, tys, s) -> Proc (x, args, tys, normalizeStmt s)
+    Proc (x, args, tys, l, s) -> Proc (x, args, tys, l, normalizeStmt s)
 
 
 let normalizeProg p = match p with

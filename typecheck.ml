@@ -60,9 +60,16 @@ let rec eqTy t1 t2 = match (t1,t2) with
   | (TyInt, TyInt) -> true
   | (TyBool, TyBool) -> true
   | (TyChan t1, TyChan t2) -> eqTy t1 t2
-  | (TyFunc (ts1, t1), TyFunc (ts2, t2)) -> eqTy t1 t2 &&
-                                            (List.length ts1 == List.length ts2) &&
-                                            (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2))
+  | (TyFunc (ts1, t1), TyFunc (ts2, t2)) ->
+      (match (t1, t2) with
+        | None, Some _ | Some _, None -> false
+        | Some t1', Some t2' ->
+            eqTy t1' t2' &&
+            (List.length ts1 == List.length ts2) &&
+            (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2))
+        | None, None ->
+            (List.length ts1 == List.length ts2) &&
+            (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2)))
   | _ -> false
 
 (* both types are Int return *)
@@ -107,7 +114,7 @@ let rec inferTyExp env e =
     (match lookup env name with
      | Some (TyFunc (params, returnType)) ->
        let inferred = List.map (inferTyExp env) ps in
-       if paramsMatch inferred params then Some returnType else None
+       if paramsMatch inferred params then returnType else None
      | _ -> None)
 
 (* Implementation of G | (stmt : Cmd | G) where we simply skip Cmd and as above
@@ -185,15 +192,12 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
 
 (* TODO invalid function name *)
 let collectFn env proc = match proc with
-  | Proc (fn, params, ret, body) ->
+  | Proc (fn, params, ret, locals, body) ->
     match lookup env fn with
     | Some (_) -> None (* function was already declared *)
     | _ ->
       let pt = List.map (fun (e, t) -> t) params in
-      (match ret with
-       | Some rt -> Some (add fn (TyFunc (pt, rt)) env)
-       (* default return type to TyInt, it might be void *)
-       | None -> Some (add fn (TyFunc (pt, TyInt)) env))
+       Some (add fn (TyFunc (pt, ret)) env)
 
 let rec collectFns env procs = match procs with
   | p::rest ->
@@ -231,7 +235,7 @@ let rec typeCheckFunctionBody env stmt rt =
  * merged with the surrouding env.
  * Returns the original env that was passed in.
  * *)
-let typeCheckProc env (Proc (fn, params, ret, body)) =
+let typeCheckProc env (Proc (fn, params, ret, locals, body)) =
   let emptyEnv = initEnv () in
   match typeCheckParams emptyEnv params with
   | Some paramsEnv ->

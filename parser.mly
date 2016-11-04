@@ -42,10 +42,10 @@ procs:
     proc        { [$1] }
   | proc procs  { $1 :: $2 }
 proc:
-    FUNC NAME LPAREN RPAREN block             { Proc($2, [], None, $5) }
-  | FUNC NAME LPAREN param RPAREN block       { Proc($2, $4, None, $6) }
-  | FUNC NAME LPAREN RPAREN dtype block       { Proc($2, [], Some($5), $6) }
-  | FUNC NAME LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), $7) }
+    FUNC NAME LPAREN RPAREN block             { Proc($2, [], None, Locals([]), $5) }
+  | FUNC NAME LPAREN param RPAREN block       { Proc($2, $4, None, Locals([]), $6) }
+  | FUNC NAME LPAREN RPAREN dtype block       { Proc($2, [], Some($5), Locals([]), $6) }
+  | FUNC NAME LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), Locals([]), $7) }
 ;
 param:
     param COMMA NAME dtype { (Var($3), $4) :: $1 }
