@@ -125,70 +125,73 @@ let rec inferTyExp env e =
 
 *)
 let rec typeCheckStmt (env : env) stmt = match stmt with
-  | Skip -> Some env
+  | Skip -> Some (env, stmt)
   | Seq (s1, s2) ->
     (match typeCheckStmt env s1 with
      | None -> None
-     | Some e2 -> typeCheckStmt e2 s2)
+     | Some (e2, st) ->
+         (match typeCheckStmt e2 s2 with
+          | None -> None
+          | Some (e3, st') -> Some (env, Seq (st, st'))))
   | Go s ->
     (match (typeCheckStmt (newBlock env) s) with
-     | Some _ -> Some env
+     | Some (_, s') -> Some (env, s')
      | None -> None)
-  | Transmit (ch, e) ->
+  | Transmit (ch, e) as st ->
     (match (lookup env ch) with
      | Some (TyChan _) ->
        (* according to tips, e should always be an int *)
        (match inferTyExp env e with
-        | Some TyInt -> Some env
+        | Some TyInt -> Some (env, st)
         | _ -> None)
      | _ -> None)
-  | RcvStmt ch ->
+  | RcvStmt ch as st ->
     (match (lookup env ch) with
-     | Some (TyChan t1) -> Some env
+     | Some (TyChan t1) -> Some (env, st)
      | _ -> None)
-  | Decl (v, e) ->
+  | Decl (v, e) as st ->
     (match (lookupImmd env v) with
      (* Decl only works if v was not previously declared *)
      | None -> (
          match (inferTyExp env e) with
-         | Some t1 -> Some (add v t1 env)
+         | Some t1 -> Some (add v t1 env, st)
          | _ -> None
        )
      | Some _ -> None)
-  | DeclChan v ->
-    Some (add v (TyChan TyInt) env)
-  | Assign (v,e) ->
+  | DeclChan v as st ->
+    Some (add v (TyChan TyInt) env, st)
+  | Assign (v,e) as st ->
     (match (lookup env v) with
      | None -> None (* Unknown variable *)
      | Some t1 -> let t2 = inferTyExp env e in
        (match t2 with
         | None -> None
-        | Some t3 -> if eqTy t1 t3 then Some env else None))
-  | While (e, s) ->
+        | Some t3 -> if eqTy t1 t3 then Some (env, st) else None))
+  | While (e, s) as st ->
     (match (inferTyExp env e) with
      | Some TyBool ->
        (match typeCheckStmt (newBlock env) s with
-        | Some e2 -> Some env
+        | Some (e2, s') -> Some (env, st)
         | None -> None)
      | _ -> None)
-  | ITE (e, s1 ,s2) ->
+  | ITE (e, s1 ,s2) as st ->
     (match (inferTyExp env e) with
      | Some TyBool ->
        (match (typeCheckStmt (newBlock env) s1, typeCheckStmt (newBlock env) s2) with
-        | (Some _, Some _) -> Some env
+        | (Some _, Some _) -> Some (env, st)
         | _ -> None)
      | _ -> None)
-  | Return e ->
+  | Return e as st ->
     (match inferTyExp env e with
      | None -> None
-     | Some _ -> Some env)
-  | FuncCall (v, ps) ->
+     | Some _ -> Some (env, st))
+  | FuncCall (v, ps) as st ->
     (match (lookup env v) with
      | Some (TyFunc (params, _)) ->
        let inferred = List.map (inferTyExp env) ps in
-       if paramsMatch inferred params then Some env else None
+       if paramsMatch inferred params then Some (env, st) else None
      | _ -> None)
-  | Print e -> Some env
+  | Print e as st -> Some (env, st)
 
 (* TODO invalid function name *)
 let collectFn env proc = match proc with
@@ -241,9 +244,9 @@ let typeCheckProc env (Proc (fn, params, ret, locals, body)) =
   | Some paramsEnv ->
     (* type check stmt with paramsEnv containing params *)
     (match typeCheckStmt (mergeEnv paramsEnv env) body with
-     | Some _ -> (
+     | Some (_, st) -> (
          match typeCheckFunctionBody (mergeEnv paramsEnv env) body ret with
-         | Some _ -> Some env
+         | Some _ -> Some (env, st)
          | None -> None)
      | None -> None)
   | None -> None
@@ -255,16 +258,19 @@ let typeCheckProc env (Proc (fn, params, ret, locals, body)) =
 let rec typeCheckProcs env procs = match procs with
   | p::rest ->
     (match typeCheckProc env p with
-     | Some newEnv -> typeCheckProcs newEnv rest
+     | Some (newEnv, st') -> typeCheckProcs newEnv rest
      | _ -> None)
-  | [] -> Some env
+  | [] -> Some (env, procs)
 
 (* Top level type checker for the entire prog *)
 let typecheck (Prog (procs, stmt)) =
   match collectFns (initEnv ()) procs with
   | Some initEnv ->
     (match typeCheckProcs initEnv procs with
-     | Some newEnv -> typeCheckStmt newEnv stmt
+     | Some (newEnv, st) ->
+         (match typeCheckStmt newEnv stmt with
+          | Some (_, st') -> Some st'
+          | None -> None)
      | None -> None)
   | None -> None
 

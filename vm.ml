@@ -6,6 +6,8 @@
 
  *)
 
+(* let helpassignloc loc = [assignfromstack(0, loc), pops] *)
+
 type instructions =
                     Halt
                   (* Stack operations *)
