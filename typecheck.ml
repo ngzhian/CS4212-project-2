@@ -61,15 +61,15 @@ let rec eqTy t1 t2 = match (t1,t2) with
   | (TyBool, TyBool) -> true
   | (TyChan t1, TyChan t2) -> eqTy t1 t2
   | (TyFunc (ts1, t1), TyFunc (ts2, t2)) ->
-      (match (t1, t2) with
-        | None, Some _ | Some _, None -> false
-        | Some t1', Some t2' ->
-            eqTy t1' t2' &&
-            (List.length ts1 == List.length ts2) &&
-            (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2))
-        | None, None ->
-            (List.length ts1 == List.length ts2) &&
-            (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2)))
+    (match (t1, t2) with
+     | None, Some _ | Some _, None -> false
+     | Some t1', Some t2' ->
+       eqTy t1' t2' &&
+       (List.length ts1 == List.length ts2) &&
+       (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2))
+     | None, None ->
+       (List.length ts1 == List.length ts2) &&
+       (List.for_all (fun (t1,t2) -> eqTy t1 t2) (List.combine ts1 ts2)))
   | _ -> false
 
 (* both types are Int return *)
@@ -117,6 +117,20 @@ let rec inferTyExp env e =
        if paramsMatch inferred params then returnType else None
      | _ -> None)
 
+let mergeLocals l1 l2 = match l1, l2 with
+  | Locals l1', Locals l2' ->
+     Locals (l1' @ l2')
+
+let rec collectLocals stmt = match stmt with
+  | Seq (s1, s2) -> mergeLocals (collectLocals s1) (collectLocals s2)
+  | Go s -> collectLocals s
+  | While (e, _, st) -> collectLocals st
+  | ITE (e, _, sl, _, sr) -> mergeLocals (collectLocals sl) (collectLocals sr)
+  | Decl (None, v, e) -> Locals []
+  | Decl (Some ty, v, e) -> Locals [(v, ty)]
+  | DeclChan c -> Locals [(c, TyInt)]
+  | _ -> Locals []
+
 (* Implementation of G | (stmt : Cmd | G) where we simply skip Cmd and as above
    use 'option' to report failure
 
@@ -124,17 +138,17 @@ let rec inferTyExp env e =
    The below is just a sketch.
 
 *)
-let rec typeCheckStmt (env : env) stmt = match stmt with
+let rec typeCheckStmt (env : env) stmt locals = match stmt with
   | Skip -> Some (env, stmt)
   | Seq (s1, s2) ->
-    (match typeCheckStmt env s1 with
+    (match typeCheckStmt env s1 locals with
      | None -> None
      | Some (e2, st) ->
-         (match typeCheckStmt e2 s2 with
-          | None -> None
-          | Some (e3, st') -> Some (env, Seq (st, st'))))
+       (match typeCheckStmt e2 s2 locals with
+        | None -> None
+        | Some (e3, st') -> Some (env, Seq (st, st'))))
   | Go s ->
-    (match (typeCheckStmt (newBlock env) s) with
+    (match (typeCheckStmt (newBlock env) s locals) with
      | Some (_, s') -> Some (env, s')
      | None -> None)
   | Transmit (ch, e) as st ->
@@ -149,12 +163,12 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
     (match (lookup env ch) with
      | Some (TyChan t1) -> Some (env, st)
      | _ -> None)
-  | Decl (v, e) as st ->
+  | Decl (t, v, e) ->
     (match (lookupImmd env v) with
      (* Decl only works if v was not previously declared *)
      | None -> (
          match (inferTyExp env e) with
-         | Some t1 -> Some (add v t1 env, st)
+         | Some t1 -> Some (add v t1 env, Decl ((Some t1, v, e)))
          | _ -> None
        )
      | Some _ -> None)
@@ -167,18 +181,21 @@ let rec typeCheckStmt (env : env) stmt = match stmt with
        (match t2 with
         | None -> None
         | Some t3 -> if eqTy t1 t3 then Some (env, st) else None))
-  | While (e, s) as st ->
+  | While (e, _, s) as st ->
     (match (inferTyExp env e) with
      | Some TyBool ->
-       (match typeCheckStmt (newBlock env) s with
-        | Some (e2, s') -> Some (env, st)
+       (match typeCheckStmt (newBlock env) s locals with
+        | Some (_, s') -> Some (env, While (e, collectLocals st, s'))
         | None -> None)
      | _ -> None)
-  | ITE (e, s1 ,s2) as st ->
+  | ITE (e, _, s1, _, s2) as st ->
     (match (inferTyExp env e) with
      | Some TyBool ->
-       (match (typeCheckStmt (newBlock env) s1, typeCheckStmt (newBlock env) s2) with
-        | (Some _, Some _) -> Some (env, st)
+       (let tcl = typeCheckStmt (newBlock env) s1 locals in
+        let tcr = typeCheckStmt (newBlock env) s2 locals in
+        match tcl, tcr with
+        | (Some (_, s1'), Some (_, s2')) ->
+            Some (env, ITE (e, collectLocals s1, s1', collectLocals s2, s2'))
         | _ -> None)
      | _ -> None)
   | Return e as st ->
@@ -200,7 +217,7 @@ let collectFn env proc = match proc with
     | Some (_) -> None (* function was already declared *)
     | _ ->
       let pt = List.map (fun (e, t) -> t) params in
-       Some (add fn (TyFunc (pt, ret)) env)
+      Some (add fn (TyFunc (pt, ret)) env)
 
 let rec collectFns env procs = match procs with
   | p::rest ->
@@ -228,28 +245,43 @@ let rec typeCheckParams paramEnv params =
 
 let rec typeCheckFunctionBody env stmt rt =
   (match stmt with
+   | Seq (l, r) ->
+       (match typeCheckFunctionBody env l rt with
+        | Some e' -> typeCheckFunctionBody e' r rt
+        | None -> None)
+   | Go g -> typeCheckFunctionBody env g rt
+   | While (_, _, s) -> typeCheckFunctionBody env s rt
+   | ITE (_, _, l, _, r) ->
+       (match typeCheckFunctionBody env l rt with
+        | Some e' -> typeCheckFunctionBody e' r rt
+        | None -> None)
+   | Transmit _ | RcvStmt _ | FuncCall _ | Skip
+   | Decl _ | DeclChan _ | Assign _ | Print _ -> Some env
    | Return x -> (
        let xt = inferTyExp env x in
        if xt = rt then Some env else None)
-   | _ -> typeCheckFunctionBody env stmt rt)
+   )
 
 (* Type checks a proc and its body.
  * Type checks all params, then type checks body with the params env
  * merged with the surrouding env.
  * Returns the original env that was passed in.
  * *)
-let typeCheckProc env (Proc (fn, params, ret, locals, body)) =
-  let emptyEnv = initEnv () in
-  match typeCheckParams emptyEnv params with
-  | Some paramsEnv ->
-    (* type check stmt with paramsEnv containing params *)
-    (match typeCheckStmt (mergeEnv paramsEnv env) body with
-     | Some (_, st) -> (
-         match typeCheckFunctionBody (mergeEnv paramsEnv env) body ret with
-         | Some _ -> Some (env, st)
-         | None -> None)
+let typeCheckProc env proc =
+  match proc with
+  | (Proc (fn, params, ret, locals, body)) ->
+    (let emptyEnv = initEnv () in
+     match typeCheckParams emptyEnv params with
+     | Some paramsEnv ->
+       (* type check stmt with paramsEnv containing params *)
+       (match typeCheckStmt (mergeEnv paramsEnv env) body locals with
+        | Some (_, body') -> (
+            match typeCheckFunctionBody (mergeEnv paramsEnv env) body' ret with
+            | Some _ ->
+                Some (env, Proc(fn, params, ret, collectLocals body', body'))
+            | None -> None)
+        | None -> None)
      | None -> None)
-  | None -> None
 
 (* All procs are assumed to be recursive, because the env
  * we use to typecheck contains all function definitions
@@ -258,9 +290,12 @@ let typeCheckProc env (Proc (fn, params, ret, locals, body)) =
 let rec typeCheckProcs env procs = match procs with
   | p::rest ->
     (match typeCheckProc env p with
-     | Some (newEnv, st') -> typeCheckProcs newEnv rest
-     | _ -> None)
-  | [] -> Some (env, procs)
+     | Some (newEnv, st) ->
+       (match typeCheckProcs newEnv rest with
+        | Some (e', st') -> Some (e', st::st')
+        | None -> None)
+     | None -> None)
+  | [] -> Some (env, [])
 
 (* Top level type checker for the entire prog *)
 let typecheck (Prog (procs, stmt)) =
@@ -268,9 +303,9 @@ let typecheck (Prog (procs, stmt)) =
   | Some initEnv ->
     (match typeCheckProcs initEnv procs with
      | Some (newEnv, st) ->
-         (match typeCheckStmt newEnv stmt with
-          | Some (_, st') -> Some st'
-          | None -> None)
+       (match typeCheckStmt newEnv stmt (Locals []) with
+        | Some (_, st') -> Some (Prog (st, st'))
+        | None -> None)
      | None -> None)
   | None -> None
 

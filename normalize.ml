@@ -44,7 +44,7 @@ let rec normalizeExp e = match e with
      Not (snd r1))
 
   | RcvExp ch         -> let x = freshName() in
-    (Decl (x, RcvExp ch),
+    (Decl (Some TyInt, x, RcvExp ch),
      Var x)
 
   (* Introduce Skip for convenience, maybe should have
@@ -62,7 +62,7 @@ let rec normalizeExp e = match e with
     let c  = List.fold_left (fun a -> fun b -> Seq (a,b)) Skip (List.map fst rs) in
     let xs = List.map snd rs in
     let y = freshName() in
-    (Seq (c, Decl (y, FuncExp (x,xs))),
+    (Seq (c, Decl (None, y, FuncExp (x,xs))),
      Var y)
 
 let rec normalizeStmt s = match s with
@@ -71,15 +71,15 @@ let rec normalizeStmt s = match s with
   | Transmit (x,e) -> let r = normalizeExp e in
     Seq (fst r, Transmit (x, snd r))
   | RcvStmt x   -> RcvStmt x
-  | Decl (x,e)  -> let r = normalizeExp e in
-    Seq (fst r, Decl (x, snd r))
+  | Decl (t, x,e)  -> let r = normalizeExp e in
+    Seq (fst r, Decl (t, x, snd r))
   | DeclChan x  -> DeclChan x
   | Assign (x,e) -> let r = normalizeExp e in
     Seq (fst r, Assign (x, snd r))
-  | While (e,s)  -> let r = normalizeExp e in
-    Seq (fst r, While (snd r, normalizeStmt s))
-  | ITE (e,s1,s2) -> let r = normalizeExp e in
-    Seq (fst r, ITE (snd r, normalizeStmt s1, normalizeStmt s2))
+  | While (e, ls, s)  -> let r = normalizeExp e in
+    Seq (fst r, While (snd r, ls, normalizeStmt s))
+  | ITE (e, l1, s1, l2, s2) -> let r = normalizeExp e in
+    Seq (fst r, ITE (snd r, l1, normalizeStmt s1, l2, normalizeStmt s2))
   | Return e      -> let r = normalizeExp e in
     Seq (fst r, Return (snd r))
   | FuncCall (x, es) -> let rs = List.map normalizeExp es in

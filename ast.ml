@@ -13,11 +13,11 @@ and stmt = Seq of stmt * stmt
           | Go of stmt
           | Transmit of string * exp
           | RcvStmt of string 
-          | Decl of string * exp (* Decl of types option * string * exp *)
+          | Decl of (types option) * string * exp (* Decl of types option * string * exp *)
           | DeclChan of string
           | Assign of string * exp
-          | While of exp * stmt
-          | ITE of exp * stmt * stmt
+          | While of exp * locals * stmt
+          | ITE of exp * locals * stmt * locals * stmt
           | Return of exp
           | FuncCall of string * (exp list)
           | Print of exp

@@ -88,8 +88,7 @@ let rec translateB exp = match exp with
     ([IRC_Assign (x, IRC_IConst 1)], x)
   | BConst false -> let x = freshName() in
     ([IRC_Assign (x, IRC_IConst 0)], x)
-  | Var v -> let x = freshName() in
-    ([IRC_Assign (x, IRC_Var v)], x)
+  | Var v -> ([IRC_Get v], v)
   | FuncExp (f, ps) ->
     let x = freshName() in
     let n = List.length ps in

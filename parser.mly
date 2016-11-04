@@ -42,10 +42,10 @@ procs:
     proc        { [$1] }
   | proc procs  { $1 :: $2 }
 proc:
-    FUNC NAME LPAREN RPAREN block             { Proc($2, [], None, Locals([]), $5) }
-  | FUNC NAME LPAREN param RPAREN block       { Proc($2, $4, None, Locals([]), $6) }
-  | FUNC NAME LPAREN RPAREN dtype block       { Proc($2, [], Some($5), Locals([]), $6) }
-  | FUNC NAME LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), Locals([]), $7) }
+    FUNC NAME LPAREN RPAREN block             { Proc($2, [], None, Locals [], $5) }
+  | FUNC NAME LPAREN param RPAREN block       { Proc($2, $4, None, Locals [], $6) }
+  | FUNC NAME LPAREN RPAREN dtype block       { Proc($2, [], Some($5), Locals [], $6) }
+  | FUNC NAME LPAREN param RPAREN dtype block { Proc($2, $4, Some($6), Locals [], $7) }
 ;
 param:
     param COMMA NAME dtype { (Var($3), $4) :: $1 }
@@ -59,11 +59,11 @@ statement:
   | GO block { Go($2) }
   | NAME SEND aexp { Transmit($1, $3) }
   | SEND NAME { RcvStmt($2) }
-  | NAME DECLARE bexp { Decl($1, $3) }
+  | NAME DECLARE bexp { Decl(None, $1, $3) }
   | NAME DECLARE NEWCHANNEL { DeclChan($1)}
   | NAME ASSIGN bexp { Assign($1, $3) }
-  | WHILE bexp block { While($2, $3) }
-  | IF bexp block ELSE block { ITE($2, $3, $5) }
+  | WHILE bexp block { While($2, Locals [], $3) }
+  | IF bexp block ELSE block { ITE($2, Locals [], $3, Locals [], $5) }
   | RETURN bexp { Return($2) }
   | NAME LPAREN RPAREN { FuncCall($1, []) }
   | NAME LPAREN arg RPAREN { FuncCall($1, $3) }
