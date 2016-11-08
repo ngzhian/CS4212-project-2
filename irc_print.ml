@@ -13,10 +13,6 @@ let to_string_irc_exp irc_exp =
   | IRC_IConst (a) -> "IRC_IConst " ^ (string_of_int a)
   | IRC_Var (a) -> "IRC_Var " ^ a
 
-let to_string_irc irc =
-  match irc with
-  | IRC cmds -> "IRC"
-
 let to_string_irc_cmd irc_cmd =
   match irc_cmd with
   | IRC_Assign (label, exp) -> "IRC_Assign " ^ label ^ " " ^ (to_string_irc_exp exp)
@@ -27,3 +23,9 @@ let to_string_irc_cmd irc_cmd =
   | IRC_Call (label, a) -> "IRC_Call " ^ (string_of_int label) ^ " " ^ (string_of_int a)
   | IRC_Return (label) -> "IRC_Return " ^ label
   | IRC_Get (label) -> "IRC_Get " ^ label
+
+let to_string_irc irc =
+  match irc with
+  | IRC cmds ->
+      List.mapi (fun i -> fun cmd -> (string_of_int (i+1)) ^ " " ^ (to_string_irc_cmd cmd) ^ "\n") cmds
+      |> String.concat ""

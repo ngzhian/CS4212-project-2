@@ -7,6 +7,20 @@ let freshLabel _ =  labelSupply := !labelSupply + 1;
 let freshName _ =  labelSupply := !labelSupply + 1;
   String.concat "" ["genirc" ; string_of_int (!labelSupply )]
 
+type symtable = SymTable of (string * int) list
+
+let symtable = SymTable []
+
+let lookup name =
+  let rec lu name t =
+    match t with
+    | SymTable [] -> -1
+    | SymTable ((n, l)::ss) -> if n = name then l else lu name (SymTable ss)
+  in lu name symtable
+
+let insertSym name label =
+  match symtable with
+    | SymTable ss -> SymTable ((name, label)::ss)
 
 (* (parts) of translation of Booleans (short-circuit evaluation!),
    yields a tuple where first component represents the IRC and
@@ -99,6 +113,88 @@ let rec translateB exp = match exp with
     let codesgen = List.fold_left (@) [] codes in
     ( codesgen
       @ placesgen
-      @ [IRC_Call (1, n)]
+      @ [IRC_Call (lookup f, n)] (* todo, fill this in with something *)
       @ [IRC_Get x], x)
   | RcvExp _ -> ([],"")
+
+let rec translateStmt stmt = match stmt with
+  | Seq (s1, s2) ->
+      let c1 = translateStmt s1 in
+      let c2 = translateStmt s2 in
+      (c1 @ c2)
+  | Go _ -> ([])
+  | Transmit _ -> ([])
+  | RcvStmt _ -> ([])
+  | Decl (ty, n, e) ->
+      let x = freshName() in
+      let code, place = translateB e in
+      (code
+      @ [IRC_Assign (x, IRC_Var place)])
+  | DeclChan _ -> ([])
+  | Assign (n, e) ->
+      let x = freshName() in
+      let code, place = translateB e in
+      (code @ [IRC_Assign (x, IRC_Var n)])
+  | While (e, l, s) ->
+      let beg = freshLabel() in
+      let body = freshLabel() in
+      let exit = freshLabel() in
+      let ecode, eplace = translateB e in
+      let scode = translateStmt s in
+      ( [IRC_Label beg]             (* begin:     *)
+      @ ecode                       (*   e.code   *)
+      @ irc_ZeroJump (eplace, exit) (*   jez exit *)
+      @ [IRC_Label body]            (* body:      *)
+      @ scode                       (*   s.code   *)
+      @ [IRC_Goto beg]              (*   j begin  *)
+      @ [IRC_Label exit]            (* exit:      *)
+      )
+  | ITE (e, s1, t, s2, f) ->
+      let bfalse = freshLabel () in
+      let exit = freshLabel () in
+      let ecode, eplace = translateB e in
+      let tcode = translateStmt t in
+      let fcode = translateStmt f in
+      ( ecode                         (*   e.code     *)
+      @ irc_ZeroJump (eplace, bfalse) (*   jez bfalse *)
+      @ tcode                         (*   t.code     *)
+      @ [IRC_Goto exit]               (*   goto exit  *)
+      @ [IRC_Label bfalse]            (* false:       *)
+      @ fcode                         (*   f.code     *)
+      @ [IRC_Label exit]              (* exit:        *)
+      )
+  | Return e ->
+      let ecode, eplace = translateB e in
+      (ecode @ [IRC_Return eplace])
+  | FuncCall (fn, params) ->
+      let n = List.length params in
+      let t' = List.map translateB params in
+      let places = List.map (fun t -> [IRC_Param (snd t)]) t' in
+      let codes = List.map fst t' in
+      let placesgen = List.fold_left (@) [] places in
+      let codesgen = List.fold_left (@) [] codes in
+      ( codesgen
+        @ placesgen
+        @ [IRC_Call (lookup fn, n)] (* todo, fill this in with something *)
+        )
+  (* | FuncCall of string * (exp list) *)
+  | Print _ | Skip -> []
+
+let translateProc proc =
+  match proc with
+  | Proc (n, params, ty, locals, stmt) ->
+      let fnl = freshLabel() in
+      let _ = insertSym n fnl in
+      let tm = translateStmt stmt in
+      ( [IRC_Label fnl]
+      @ tm
+      (* activation record *)
+      (* assign locals *)
+      @ []
+      )
+
+let translate prog =
+  match prog with
+  | Prog (procs, stmt) ->
+    IRC (List.concat (List.map translateProc procs) @ translateStmt stmt)
+

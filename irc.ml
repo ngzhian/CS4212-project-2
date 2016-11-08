@@ -4,6 +4,7 @@ let freshName _ =  nameSupply := !nameSupply + 1;
 
 type irc = IRC of (irc_cmd list)
 
+(* maybe add instr for print *)
 and irc_cmd = IRC_Assign of string * irc_exp
             | IRC_Label of int
             | IRC_Goto of int
