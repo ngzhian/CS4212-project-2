@@ -1,6 +1,6 @@
 (* Abstract Syntax Tree (AST) representation of Mini-Go *)
 
-type prog = Prog of (proc list) * stmt
+type prog = Prog of (proc list) * locals * stmt
 
 and proc = Proc of string * ((exp * types) list) * (types option) * locals * stmt
 

@@ -35,8 +35,8 @@ main:
     prog EOF                { $1 }
 ;
 prog:
-  | block                   { Prog([], $1)}
-  | procs block             { Prog($1, $2)}
+  | block                   { Prog([], Locals [], $1)}
+  | procs block             { Prog($1, Locals [], $2)}
 ;
 procs:
     proc        { [$1] }

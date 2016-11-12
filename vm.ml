@@ -1,3 +1,5 @@
+open Printf
+
 (* A simple stack-based VM with shared memory *)
 
 (* VM supports only integers, so Booleans need to be mapped to integer
@@ -13,7 +15,7 @@ type instructions =
                   (* Stack operations *)
                   | PushS of int
                   | PopS
-                  | Add 
+                  | Add
                   | Sub
                   | Div
                   | Mult
@@ -27,12 +29,14 @@ type instructions =
                   | NonZero of int
                   | Zero of int
                   | Jump of int
+                  | JumpMemLoc of int
+                  | JumpTemp of int
 
                   (* Memory operations *)
 
                   | Assign of int*int
-                  | PushToStack of int
-                  | AssignFromStack of int*int
+                  | PushMemToStack of int
+                  | AssignMemFromStack of int*int
 
                   | Lock of int
                   | Unlock of int
@@ -41,11 +45,48 @@ type instructions =
 
                   | PushE of int
                   | PopE
-                  | PushToEnv of int
-                  | AssignFromEnv of int*int
-                                
+                  | PushMemToEnv of int
+                  | AssignMemFromEnv of int*int
+                  | UpdateToEnv of int*int
+
+(* helpers to print instructions *)
+let string_of_vm ins =
+  match ins with
+  | Halt -> "Halt"
+  | PushS i -> "PushS " ^ (string_of_int i)
+  | PopS -> "PopS"
+  | Add -> "Add"
+  | Sub -> "Sub"
+  | Div -> "Div"
+  | Mult -> "Mult"
+  | Lt -> "Lt"
+  | Gt -> "Gt"
+  | Eq -> "Eq"
+  | Output -> "Output"
+  | NonZero i -> "NonZero " ^ (string_of_int i)
+  | Zero i -> "Zero " ^ (string_of_int i)
+  | Jump i -> "Jump " ^ (string_of_int i)
+  | JumpMemLoc i -> "JumpMemLoc " ^ (string_of_int i)
+  | Assign (loc, i) ->
+      sprintf "Assign mem[%d] <- %d" loc i
+  | PushMemToStack loc ->
+      sprintf "PushMemToStack sta <- mem[%d]" loc
+  | AssignMemFromStack (relPos, loc) ->
+      sprintf "AssignMemFromStack mem[%d] <- sta[~%d]" loc relPos
+  | Lock i -> "Lock " ^ (string_of_int i)
+  | Unlock i -> "Unlock " ^ (string_of_int i)
+  | PushE i -> "PushE " ^ (string_of_int i)
+  | PopE -> "PopE"
+  | PushMemToEnv i -> sprintf "PushMemToEnv env <- mem[%d]" i
+  | AssignMemFromEnv (relPos, loc) ->
+      sprintf "AssignMemFromEnv mem[%d] <- env[~%d]" loc relPos
+  | UpdateToEnv (relPos, loc) ->
+      sprintf "UpdateToEnv env[~%d] <- mem[%d]" relPos loc
+  | JumpTemp i -> "JumpTemp " ^ (string_of_int i)
+
+
 type lockInfo = { locked : bool;
-                  threadID : int }                             
+                  threadID : int }
 
 (* sp and ep refer to the next available position *)
 type thread = { pc : int ref;
@@ -55,11 +96,20 @@ type thread = { pc : int ref;
                 sp : int ref;
                 ep : int ref}
 
+let string_of_thread t =
+  sprintf "pc: %2d, sp: %2d, ep %2d, code: %-40s, stack:%2d, env:%2d"
+  !(t.pc)
+  !(t.sp)
+  !(t.ep)
+  (List.nth t.code !(t.pc) |> string_of_vm)
+  (if !(t.sp) > 0 then (Array.get t.stack (!(t.sp)-1)) else 0)
+  (if !(t.ep) > 0 then (Array.get t.env (!(t.ep)-1)) else 0)
+
 type state = { mem : int array;
                memLock : lockInfo array;
                threads : (thread list) ref;
                activeThread : int ref}
-               
+
 
 let nameSupply = ref 1
 let fresh _ =  nameSupply := !nameSupply + 1;
@@ -70,7 +120,7 @@ let memSize = 20000
 let mkMem _ = Array.make memSize 0
 
 let mkMemLock _ = Array.make memSize {locked = false; threadID = 0}
-                         
+
 (* computation stack *)
 let stkSize = 20000
 let mkStk _ = Array.make stkSize 0
@@ -78,7 +128,7 @@ let mkStk _ = Array.make stkSize 0
 (* run-time environment stack *)
 let envSize = 20000
 let mkEnv _ = Array.make envSize 0
-               
+
 let mkThread cs = { pc = ref 0;
                     code = cs;
                     stack = mkStk();
@@ -92,10 +142,12 @@ let initState cs = { mem = mkMem();
                      activeThread = ref 0}
 
 let inc r = r := !r + 1
-let dec r = r := !r - 1 
-                     
-                    
-let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
+let dec r = r := !r - 1
+
+
+let singleStep id mem memLock t =
+  let _ = printf "%s\n" (string_of_thread t) in
+  match (List.nth t.code !(t.pc)) with
   | Halt ->   true
   | PushS i -> t.stack.(!(t.sp)) <- i;
                inc t.pc;
@@ -104,10 +156,10 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
 
   | PopS -> inc t.pc;
             dec t.sp;
-            false            
+            false
 
   (* recall that sp refers to the next available position,
-     so must subtract 1 to access top element *)              
+     so must subtract 1 to access top element *)
   | Add -> let i = !(t.sp) - 1
            in t.stack.(i-1) <- t.stack.(i) + t.stack.(i-1);
               inc t.pc;
@@ -115,13 +167,21 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
               false
 
   | Sub -> let i = !(t.sp) - 1
-           in t.stack.(i-1) <- t.stack.(i) - t.stack.(i-1);
+          (* modified this slightly
+           * when generating a - b, we generate code to push a then push be
+           * so it should be t.stack.(i-1) - t.stack.(i), instead of other way
+           * *)
+           in t.stack.(i-1) <- t.stack.(i-1) - t.stack.(i);
               inc t.pc;
               dec t.sp;
               false
 
   | Div -> let i = !(t.sp) - 1
-           in t.stack.(i-1) <- t.stack.(i) / t.stack.(i-1);
+          (* modified this slightly
+           * when generating a - b, we generate code to push a then push be
+           * so it should be t.stack.(i-1) - t.stack.(i), instead of other way
+           * *)
+           in t.stack.(i-1) <- t.stack.(i-1) / t.stack.(i);
               inc t.pc;
               dec t.sp;
               false
@@ -130,7 +190,7 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
             in t.stack.(i-1) <- t.stack.(i) * t.stack.(i-1);
                inc t.pc;
                dec t.sp;
-               false                                
+               false
 
   | Lt -> let i = !(t.sp) - 1
           in (if t.stack.(i) < t.stack.(i-1)
@@ -154,8 +214,8 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
               else t.stack.(i-1) <- 0);
              inc t.pc;
              dec t.sp;
-             false                              
-                 
+             false
+
   | Output -> Printf.printf "%d \n" t.stack.(!(t.sp) - 1);
               inc t.pc;
               false
@@ -176,32 +236,38 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
 
   | Jump i -> t.pc := i;
               false
- 
-  | Assign (loc,i) -> inc t.pc;
-                      mem.(loc) <- 1;
+
+  | JumpMemLoc loc -> t.pc := mem.(loc);
                       false
 
-  | PushToStack loc -> inc t.pc;
+  (* Temp holder for jumps until after all labels are processed *)
+  | JumpTemp l -> false;
+
+  | Assign (loc,i) -> inc t.pc;
+                      mem.(loc) <- i;
+                      false
+
+  | PushMemToStack loc -> inc t.pc;
                        t.stack.(!(t.sp)) <- mem.(loc);
                        inc t.sp;
                        false
 
   (* deref of the relative position relPos and assign to mem loc,
      to access top-most stack element set relPos=1,
-     recall that sp refers to the next available position *)                         
-  | AssignFromStack (relPos,loc) -> inc t.pc;
+     recall that sp refers to the next available position *)
+  | AssignMemFromStack (relPos,loc) -> inc t.pc;
                                     mem.(loc) <- t.stack.(!(t.sp) - relPos);
                                     false
 
   (* lock a memory cell, note that acess via assign doesn't check if cell is locked,
-     hence, we assume that in case of shared memory, every access is protected by lock *)                                      
+     hence, we assume that in case of shared memory, every access is protected by lock *)
   | Lock loc -> if memLock.(loc).locked
                 then true
                 else (memLock.(loc) <- {locked = true; threadID = id};
                       inc t.pc;
                       false)
 
-  (* only the owner can unlock a memory cell, multiple unlock yield failure (true) *)                       
+  (* only the owner can unlock a memory cell, multiple unlock yield failure (true) *)
   | Unlock loc -> if (not (memLock.(loc).locked && memLock.(loc).threadID == id))
                   then true
                   else (memLock.(loc) <- {locked = false; threadID = id};
@@ -217,18 +283,24 @@ let singleStep id mem memLock t = match (List.nth t.code !(t.pc)) with
             dec t.ep;
             false
 
-  | PushToEnv loc -> inc t.pc;
+  (* Push value at memory location to RTE *)
+  | PushMemToEnv loc -> inc t.pc;
                      t.env.(!(t.ep)) <- mem.(loc);
                      inc t.ep;
                      false
 
-  | AssignFromEnv (relPos,loc) -> inc t.pc;
+  | AssignMemFromEnv (relPos,loc) -> inc t.pc;
                                   mem.(loc) <- t.env.(!(t.ep) - relPos);
-                                  false              
-                       
+                                  false
+
+  (* Update RTE relative position to value at memory location *)
+  | UpdateToEnv (relPos,loc) -> inc t.pc;
+                                t.env.(!(t.ep) - relPos) <- mem.(loc);
+                                false
+
 let debug txt = Printf.printf txt;
                 Printf.printf "\n"
-                
+
 let run cs = let st = initState cs in
              let stop = ref false in
              while not !stop do
@@ -239,9 +311,9 @@ let run cs = let st = initState cs in
                   done;
              done;
              st
-                        
+
 let testProg1 = [PushS 1; PushS 2; Add; Output; Halt]
 
-let testProg2 = [PushS 1; PushS 2; Lt; Output; Halt]                  
-                          
-let getThread st i = (List.nth !(st.threads) i)  
+let testProg2 = [PushS 1; PushS 2; Lt; Output; Halt]
+
+let getThread st i = (List.nth !(st.threads) i)

@@ -96,4 +96,4 @@ let normalizeProc p = match p with
 
 
 let normalizeProg p = match p with
-    Prog (ps, s) -> Prog (List.map normalizeProc ps, normalizeStmt s)
+    Prog (ps, l, s) -> Prog (List.map normalizeProc ps, l, normalizeStmt s)

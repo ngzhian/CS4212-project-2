@@ -298,13 +298,13 @@ let rec typeCheckProcs env procs = match procs with
   | [] -> Some (env, [])
 
 (* Top level type checker for the entire prog *)
-let typecheck (Prog (procs, stmt)) =
+let typecheck (Prog (procs, locals, stmt)) =
   match collectFns (initEnv ()) procs with
   | Some initEnv ->
     (match typeCheckProcs initEnv procs with
      | Some (newEnv, st) ->
        (match typeCheckStmt newEnv stmt (Locals []) with
-        | Some (_, st') -> Some (Prog (st, st'))
+        | Some (_, st') -> Some (Prog (st, collectLocals st', st'))
         | None -> None)
      | None -> None)
   | None -> None

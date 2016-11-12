@@ -1,3 +1,4 @@
+open Printf
 open Irc
 
 let to_string_irc_exp irc_exp =
@@ -12,6 +13,7 @@ let to_string_irc_exp irc_exp =
   | IRC_Not (a) -> "IRC_Not " ^ a
   | IRC_IConst (a) -> "IRC_IConst " ^ (string_of_int a)
   | IRC_Var (a) -> "IRC_Var " ^ a
+  | IRC_Local (n, locals) -> sprintf "IRC_Local %s locals: %s" n (String.concat " " (locals))
 
 let to_string_irc_cmd irc_cmd =
   match irc_cmd with
@@ -23,6 +25,15 @@ let to_string_irc_cmd irc_cmd =
   | IRC_Call (label, a) -> "IRC_Call " ^ (string_of_int label) ^ " " ^ (string_of_int a)
   | IRC_Return (label) -> "IRC_Return " ^ label
   | IRC_Get (label) -> "IRC_Get " ^ label
+  | IRC_PushE (i) -> "IRC_PushE " ^ (string_of_int i)
+  | IRC_PopE -> "IRC_PopE "
+  | IRC_AssignLocal (label, exp, locals)->
+      sprintf
+      "IRC_AssignLocal %s %s locals: %s"
+      label
+      (to_string_irc_exp exp)
+      (String.concat " " (locals))
+  | IRC_Print v -> "IRC_Print " ^ v
 
 let to_string_irc irc =
   match irc with

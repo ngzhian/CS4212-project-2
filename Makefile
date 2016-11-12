@@ -69,7 +69,7 @@
 #
 # The Caml sources (including camlyacc and camllex source files)
 
-SOURCES = ast.ml ast_print.ml parser.mly lexer.mll typecheck.ml normalize.ml irc.ml irc_print.ml genir.ml test.ml
+SOURCES = ast.ml ast_print.ml parser.mly lexer.mll typecheck.ml normalize.ml irc.ml irc_print.ml genir.ml codegen.ml vm.ml vm_print.ml full_test.ml
 
 # The executable file to generate
 
