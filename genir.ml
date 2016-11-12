@@ -185,7 +185,10 @@ let rec translateStmt stmt = match stmt with
         (* all the code needed to evaluate arguments *)
         (List.concat codes)
         (* save the place we can find the evaluated arguments *)
-        @ (List.map (fun (p) -> IRC_Param p) places)
+        (* this is reverse because VM will be pushing it into a stack
+         * and then popping from the stack into the env
+         * *)
+        @ (List.rev_map (fun (p) -> IRC_Param p) places)
         (* call the function by label, we should have this value after walking the proc list *)
         @ [IRC_Call (lookup fn, List.length ps)]
       )

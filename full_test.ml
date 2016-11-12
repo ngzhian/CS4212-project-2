@@ -41,7 +41,9 @@ let codeGenToVm irc =
   | Some irc ->
     let _ = printf "VM Code\n=======\n" in
     (match codeGen irc with
-    | Some cg -> Some cg
+    | Some cg ->
+        List.iteri (fun i cmd -> (printf "%2d %s\n" i (string_of_vm cmd))) cg;
+        Some cg
     | None -> let _ = printf "CODE_GEN FAILED" in None)
   | None -> None
 
@@ -63,7 +65,7 @@ let rec run_all lexbuf =
     let _ = printAst typedAst in
     let irc = translateToIrc typedAst in
     let vmCode = codeGenToVm irc in
-    let _ = runVm vmCode in
+    (* let _ = runVm vmCode in *)
     ()
   with SyntaxError _ ->
     printf "FAIL\n"

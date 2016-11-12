@@ -25,7 +25,9 @@ and irc_exp = IRC_And of string * string
             | IRC_Division of string * string
             | IRC_Not of string
             | IRC_IConst of int
+            (* refering to a temprory variable, e.g. created when running a binary op *)
             | IRC_Var of string
+            (* refering to a local variable, e.g. param, declared variable *)
             | IRC_Local of string * string list
 
 (* short-hand for 'zero' jump *)

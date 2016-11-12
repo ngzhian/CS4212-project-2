@@ -48,6 +48,7 @@ type instructions =
                   | PushMemToEnv of int
                   | AssignMemFromEnv of int*int
                   | UpdateToEnv of int*int
+                  | PushStackToEnv of int
 
 (* helpers to print instructions *)
 let string_of_vm ins =
@@ -157,6 +158,11 @@ let singleStep id mem memLock t =
   | PopS -> inc t.pc;
             dec t.sp;
             false
+
+  (* | Reverse n -> ( *)
+  (*   Array.sub t.stack (t.sp - n) n *)
+
+  (* ) *)
 
   (* recall that sp refers to the next available position,
      so must subtract 1 to access top element *)
@@ -289,12 +295,19 @@ let singleStep id mem memLock t =
                      inc t.ep;
                      false
 
+  | PushStackToEnv relPos -> inc t.pc;
+                      t.env.(!(t.ep) - relPos) <- t.stack.(!(t.sp) - 1);
+                      dec t.sp;
+                      inc t.ep;
+                      false
+
   | AssignMemFromEnv (relPos,loc) -> inc t.pc;
                                   mem.(loc) <- t.env.(!(t.ep) - relPos);
                                   false
 
   (* Update RTE relative position to value at memory location *)
   | UpdateToEnv (relPos,loc) -> inc t.pc;
+  (* temporary assignments are consumed via stack *)
                                 t.env.(!(t.ep) - relPos) <- mem.(loc);
                                 false
 
