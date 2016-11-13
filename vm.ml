@@ -227,7 +227,7 @@ let singleStep id mem memLock t =
               false
 
   | NonZero i -> let x = t.stack.(!(t.sp) - 1) in
-                 inc t.sp;
+                 dec t.sp;
                  (if x == 0
                  then inc t.pc
                  else t.pc := i);
