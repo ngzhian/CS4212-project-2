@@ -1,3 +1,4 @@
+open Printf
 open Vm
 
 let string_of_vm ins =
@@ -27,3 +28,5 @@ let string_of_vm ins =
   | PushMemToEnv i -> "PushMemToEnv loc:" ^ (string_of_int i)
   | AssignMemFromEnv (i, j) -> "AssignMemFromEnv relpos:" ^ (string_of_int i) ^ " loc:" ^ (string_of_int j)
   | UpdateToEnv (i, j) -> "UpdateToEnv relpos:" ^ (string_of_int i) ^ " loc:" ^ (string_of_int j)
+  | PopStackToEnv relPos ->
+      sprintf "PopStackToEnv env[~%d] <- sta" relPos

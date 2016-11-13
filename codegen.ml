@@ -75,15 +75,16 @@ let codeGenIrcCmd cmd ic =
       (* temp variables are all on the stack, will be pushed to RTE by IRC_Call *)
       []
   | IRC_Call (fn, n) ->
-      let return_add = [ PushE (ic + 1) ] in
       let rec build acc n =
         if n == 0 then acc else (Vm.PushE 0):: (build acc (n - 1)) in
       (* push default values for all args into RTE *)
       let initArguments = build [] n in
       (* then replace default values of values from stack *)
       (* top of stack has value of rightmost argument, which goes to the top of the RTE *)
-      let stackToEnv = List.mapi (fun i _ -> Vm.PushStackToEnv (i + 1)) initArguments in
+      let stackToEnv = List.mapi (fun i _ -> Vm.PopStackToEnv (i + 1)) initArguments in
       let jump = [Jump fn] in
+      let num_instr = n * 2 + 1 + 1 in
+      let return_add = [ PushE (ic + num_instr) ] in
 
         return_add
       @ initArguments
@@ -92,7 +93,15 @@ let codeGenIrcCmd cmd ic =
 
       (* todo *)
   | IRC_Return _ ->
-      [ Vm.Halt ]
+      let m = upMem () in
+      [
+        (* my return address is stored in RTE, copy it to mem *)
+        AssignMemFromEnv (1, m);
+        (* pop the return addr *)
+        PopE;
+        (* jump back to my caller *)
+        JumpMemLoc m;
+      ]
       (* todo *)
   | IRC_Get name ->
       let m = upMem () in

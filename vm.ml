@@ -30,7 +30,6 @@ type instructions =
                   | Zero of int
                   | Jump of int
                   | JumpMemLoc of int
-                  | JumpTemp of int
 
                   (* Memory operations *)
 
@@ -48,7 +47,7 @@ type instructions =
                   | PushMemToEnv of int
                   | AssignMemFromEnv of int*int
                   | UpdateToEnv of int*int
-                  | PushStackToEnv of int
+                  | PopStackToEnv of int
 
 (* helpers to print instructions *)
 let string_of_vm ins =
@@ -83,7 +82,8 @@ let string_of_vm ins =
       sprintf "AssignMemFromEnv mem[%d] <- env[~%d]" loc relPos
   | UpdateToEnv (relPos, loc) ->
       sprintf "UpdateToEnv env[~%d] <- mem[%d]" relPos loc
-  | JumpTemp i -> "JumpTemp " ^ (string_of_int i)
+  | PopStackToEnv relPos ->
+      sprintf "PopStackToEnv env[~%d] <- sta" relPos
 
 
 type lockInfo = { locked : bool;
@@ -246,9 +246,6 @@ let singleStep id mem memLock t =
   | JumpMemLoc loc -> t.pc := mem.(loc);
                       false
 
-  (* Temp holder for jumps until after all labels are processed *)
-  | JumpTemp l -> false;
-
   | Assign (loc,i) -> inc t.pc;
                       mem.(loc) <- i;
                       false
@@ -295,10 +292,9 @@ let singleStep id mem memLock t =
                      inc t.ep;
                      false
 
-  | PushStackToEnv relPos -> inc t.pc;
+  | PopStackToEnv relPos -> inc t.pc;
                       t.env.(!(t.ep) - relPos) <- t.stack.(!(t.sp) - 1);
                       dec t.sp;
-                      inc t.ep;
                       false
 
   | AssignMemFromEnv (relPos,loc) -> inc t.pc;

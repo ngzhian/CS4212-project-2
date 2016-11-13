@@ -65,7 +65,7 @@ let rec run_all lexbuf =
     let _ = printAst typedAst in
     let irc = translateToIrc typedAst in
     let vmCode = codeGenToVm irc in
-    (* let _ = runVm vmCode in *)
+    let _ = runVm vmCode in
     ()
   with SyntaxError _ ->
     printf "FAIL\n"
