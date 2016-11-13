@@ -158,7 +158,7 @@ let rec typecheck_stmt (env : env) stmt locals = match stmt with
        (match t2 with
         | None -> None
         | Some t3 -> if eq_ty t1 t3 then Some (env, st, locals) else None))
-  | While (e, _, s) as st ->
+  | While (e, _, s) ->
     (match (infer_ty_exp env e) with
      | Some TyBool ->
        (match typecheck_stmt (new_block env) s locals with
