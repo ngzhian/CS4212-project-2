@@ -199,7 +199,7 @@ let singleStep id mem memLock t =
                false
 
   | Lt -> let i = !(t.sp) - 1
-          in (if t.stack.(i) < t.stack.(i-1)
+          in (if t.stack.(i-1) < t.stack.(i)
               then t.stack.(i-1) <- 1
               else t.stack.(i-1) <- 0);
              inc t.pc;
@@ -207,7 +207,7 @@ let singleStep id mem memLock t =
              false
 
   | Gt -> let i = !(t.sp) - 1
-          in (if t.stack.(i) > t.stack.(i-1)
+          in (if t.stack.(i-1) > t.stack.(i)
               then t.stack.(i-1) <- 1
               else t.stack.(i-1) <- 0);
              inc t.pc;
