@@ -24,6 +24,9 @@ let add v t (Env lst) =
   | [] -> Env ([[(v,t)]])
   | x::xs -> Env (((v,t)::x)::xs)
 
+let add_locals_to_env (Locals l) env =
+ List.fold_left (fun env (n, ty) -> add n ty env) (new_block env) l
+
 let init_env () = Env []
 
 let lu lst var =
@@ -109,95 +112,81 @@ let rec infer_ty_exp env e =
        if params_match inferred params then returnType else None
      | _ -> None)
 
-let merge_locals l1 l2 = match l1, l2 with
-  | Locals l1', Locals l2' ->
-     Locals (l1' @ l2')
-
-let rec collect_locals stmt = match stmt with
-  | Seq (s1, s2) -> merge_locals (collect_locals s1) (collect_locals s2)
-  | Go s -> collect_locals s
-  | While (e, _, st) -> collect_locals st
-  | ITE (e, _, sl, _, sr) -> merge_locals (collect_locals sl) (collect_locals sr)
-  | Decl (None, v, e) -> Locals []
-  | Decl (Some ty, v, e) -> Locals [(v, ty)]
-  | DeclChan c -> Locals [(c, TyInt)]
-  | _ -> Locals []
-
 (* Implementation of G | (stmt : Cmd | G) where we simply skip Cmd and as above
    use 'option' to report failure
 *)
 let rec typecheck_stmt (env : env) stmt locals = match stmt with
-  | Skip -> Some (env, stmt)
+  | Skip -> Some (env, stmt, locals)
   | Seq (s1, s2) ->
     (match typecheck_stmt env s1 locals with
      | None -> None
-     | Some (e2, st) ->
-       (match typecheck_stmt e2 s2 locals with
+     | Some (e2, st, l') ->
+       (match typecheck_stmt e2 s2 l' with
         | None -> None
-        | Some (e3, st') -> Some (env, Seq (st, st'))))
+        | Some (e3, st', l'') -> Some (env, Seq (st, st'), l'')))
   | Go s ->
     (match (typecheck_stmt (new_block env) s locals) with
-     | Some (_, s') -> Some (env, s')
+     | Some (_, s', l') -> Some (env, s', l')
      | None -> None)
   | Transmit (ch, e) as st ->
     (match (lookup env ch) with
      | Some (TyChan _) ->
        (* according to tips, e should always be an int *)
        (match infer_ty_exp env e with
-        | Some TyInt -> Some (env, st)
+        | Some TyInt -> Some (env, st, locals)
         | _ -> None)
      | _ -> None)
   | RcvStmt ch as st ->
     (match (lookup env ch) with
-     | Some (TyChan t1) -> Some (env, st)
+     | Some (TyChan t1) -> Some (env, st, locals)
      | _ -> None)
-  | Decl (t, v, e) ->
+  | Decl (_, v, e) ->
+    (* allow redeclaration when moving into nested block *)
     (match (lookup_immd env v) with
-     (* TODO allow nested re-decls in inner *)
-     (* Decl only works if v was not previously declared *)
      | None -> (
          match (infer_ty_exp env e) with
-         | Some t1 -> Some (add v t1 env, Decl ((Some t1, v, e)))
+         | Some ty -> Some (add v ty env, Decl (Some ty, v, e), add_local v ty locals)
          | _ -> None
        )
      | Some _ -> None)
   | DeclChan v as st ->
-    Some (add v (TyChan TyInt) env, st)
+    Some (add v (TyChan TyInt) env, st, add_local v (TyChan TyInt) locals)
   | Assign (v,e) as st ->
     (match (lookup env v) with
      | None -> None (* Unknown variable *)
      | Some t1 -> let t2 = infer_ty_exp env e in
        (match t2 with
         | None -> None
-        | Some t3 -> if eq_ty t1 t3 then Some (env, st) else None))
+        | Some t3 -> if eq_ty t1 t3 then Some (env, st, locals) else None))
   | While (e, _, s) as st ->
     (match (infer_ty_exp env e) with
      | Some TyBool ->
        (match typecheck_stmt (new_block env) s locals with
-        | Some (_, s') -> Some (env, While (e, collect_locals st, s'))
+        | Some (_, s', l') -> Some (env, While (e, l', s'), l')
         | None -> None)
      | _ -> None)
   | ITE (e, _, s1, _, s2) ->
     (match (infer_ty_exp env e) with
      | Some TyBool ->
-       (let tcl = typecheck_stmt (new_block env) s1 locals in
-        let tcr = typecheck_stmt (new_block env) s2 locals in
-        match tcl, tcr with
-        | (Some (_, s1'), Some (_, s2')) ->
-            Some (env, ITE (e, collect_locals s1, s1', collect_locals s2, s2'))
-        | _ -> None)
+         (match typecheck_stmt (new_block env) s1 locals with
+         | None -> None
+         | Some (_, s1', l') ->
+             (match typecheck_stmt (new_block env) s2 l' with
+             | None -> None
+             | Some (_, s2', l'')->
+                 Some (env, ITE (e, l', s1', l'', s2'), l'')))
      | _ -> None)
   | Return e as st ->
     (match infer_ty_exp env e with
      | None -> None
-     | Some _ -> Some (env, st))
+     | Some _ -> Some (env, st, locals))
   | FuncCall (v, ps) as st ->
     (match (lookup env v) with
      | Some (TyFunc (params, _)) ->
        let inferred = List.map (infer_ty_exp env) ps in
-       if params_match inferred params then Some (env, st) else None
+       if params_match inferred params then Some (env, st, locals) else None
      | _ -> None)
-  | Print e as st -> Some (env, st)
+  | Print e as st -> Some (env, st, locals)
 
 (* TODO invalid function name *)
 let collect_fn env proc = match proc with
@@ -258,21 +247,17 @@ let rec typecheck_fn_body env stmt rt =
  * *)
 let typecheck_proc env proc =
   match proc with
-  | (Proc (fn, params, ret, locals, body)) ->
+  | (Proc (fn, params, ret, _, body)) ->
     (let emptyEnv = init_env () in
      match typecheck_params emptyEnv params with
      | Some paramsEnv ->
        (* type check stmt with paramsEnv containing params *)
-       (match typecheck_stmt (merge_env paramsEnv env) body locals with
-        | Some (env', body') -> (
-             (* env with the locals merged in *)
-             let cl = collect_locals body' in
-             let new_env =
-               (match cl with
-               | Locals l' ->
-                   List.fold_left (fun env (n, ty) -> add n ty env) (new_block env') l') in
-            match typecheck_fn_body new_env body' ret with
-            | Some _ -> Some (env, Proc(fn, params, ret, cl, body'))
+       (match typecheck_stmt (merge_env paramsEnv env) body (Locals []) with
+        | Some (env', body', l') ->
+            (* env with the locals merged in *)
+            let new_env = add_locals_to_env l' env' in
+            (match typecheck_fn_body new_env body' ret with
+            | Some _ -> Some (env, Proc(fn, params, ret, l', body'))
             | None -> None)
         | None -> None)
      | None -> None)
@@ -291,15 +276,19 @@ let rec typecheck_procs env procs = match procs with
      | None -> None)
   | [] -> Some (env, [])
 
+let (>>=) a b = match a with
+| Some x -> (b x)
+| None -> None
+
 (* Top level type checker for the entire prog *)
 (* might want to consider threading the locals instead of doing collecting at the top level *)
-let typecheck (Prog (procs, locals, stmt)) =
+let typecheck (Prog (procs, _, stmt)) =
   match collect_fns (init_env ()) procs with
   | Some init_env ->
     (match typecheck_procs init_env procs with
-     | Some (newEnv, st) ->
+     | Some (newEnv, ty_procs) ->
        (match typecheck_stmt newEnv stmt (Locals []) with
-        | Some (_, st') -> Some (Prog (st, collect_locals st', st'))
+        | Some (_, ty_stmt, ls) -> Some (Prog (ty_procs, ls, ty_stmt))
         | None -> None)
      | None -> None)
   | None -> None

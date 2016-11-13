@@ -38,3 +38,8 @@ and exp = And of exp * exp
          | FuncExp of string * (exp list)
 
  and locals = Locals of (string * types) list (* local variables occuring in some nested block *)
+
+let add_local n ty (Locals ls) = Locals ((n, ty) :: ls)
+
+let merge_locals l1 l2 = match l1, l2 with
+  | Locals l1', Locals l2' -> Locals (l1' @ l2')
