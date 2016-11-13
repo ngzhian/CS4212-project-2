@@ -1,11 +1,18 @@
 open Ast
-open Printf
 open Str
+open Ast_print
 
 (* the type env is a list of function signature
  * and a list of context (vars and their types) *)
 type env = Env of ((string * types) list) list
 
+let rec env_to_string (Env ps) =
+  List.map
+  (fun s -> (
+    String.concat "," (List.map (fun (s, ty) -> s ^ (to_string_type ty)) s))) ps
+  |> String.concat "|"
+
+(* enters a new scope *)
 let new_block (Env lst) =
   match lst with
   | [] -> Env ([])
@@ -35,8 +42,10 @@ let lookup_immd (Env lst) var = match lst with
 let rec lookup (Env lst) var =
   match lst with
   | [] -> None
-  | []::xs -> lookup (Env xs) var
-  | x::xs -> lu x var
+  | x::xs ->
+    (match lu x var with
+    | None -> lookup (Env xs) var
+    | result -> result)
 
 let merge_env (Env a) (Env b) = Env (a@b)
 
@@ -46,13 +55,13 @@ let rec eq_ty t1 t2 = match (t1,t2) with
   | (TyBool, TyBool) -> true
   | (TyChan t1, TyChan t2) -> eq_ty t1 t2
   | (TyFunc (ts1, t1), TyFunc (ts2, t2)) ->
-    let eqTypes l1 l2 =
+    let eq_types l1 l2 =
       (List.length l1 == List.length l2) &&
       (List.for_all (fun (t1,t2) -> eq_ty t1 t2) (List.combine l1 l2)) in
     (match (t1, t2) with
      | None, Some _ | Some _, None -> false
-     | Some t1', Some t2' -> eq_ty t1' t2' && eqTypes ts1 ts2
-     | None, None -> eqTypes ts1 ts2)
+     | Some t1', Some t2' -> eq_ty t1' t2' && eq_types ts1 ts2
+     | None, None -> eq_types ts1 ts2)
   | _ -> false
 
 (* both types are Int return *)
@@ -60,8 +69,8 @@ let rec both_int mt1 mt2 = match (mt1, mt2) with
   | (Some TyInt, Some TyInt) -> Some TyInt
   | _ -> None
 
-let rec params_match inferredTypes declaredTypes =
-  match (inferredTypes, declaredTypes) with
+let rec params_match inferred declared =
+  match (inferred, declared) with
   | [], [] -> true
   | (Some t1)::r1, h2::r2 -> eq_ty t1 h2 && params_match r1 r2
   | _ -> false
@@ -255,10 +264,15 @@ let typecheck_proc env proc =
      | Some paramsEnv ->
        (* type check stmt with paramsEnv containing params *)
        (match typecheck_stmt (merge_env paramsEnv env) body locals with
-        | Some (_, body') -> (
-            match typecheck_fn_body (merge_env paramsEnv env) body' ret with
-            | Some _ ->
-                Some (env, Proc(fn, params, ret, collect_locals body', body'))
+        | Some (env', body') -> (
+             (* env with the locals merged in *)
+             let cl = collect_locals body' in
+             let new_env =
+               (match cl with
+               | Locals l' ->
+                   List.fold_left (fun env (n, ty) -> add n ty env) (new_block env') l') in
+            match typecheck_fn_body new_env body' ret with
+            | Some _ -> Some (env, Proc(fn, params, ret, cl, body'))
             | None -> None)
         | None -> None)
      | None -> None)

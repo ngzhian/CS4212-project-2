@@ -56,7 +56,7 @@ let runVm instr =
 let printAst ast =
   match ast with
   | Some ast -> printf "Ast\n===\n%s" (to_string_prog ast)
-  | None -> ()
+  | None -> printf "AST FAILED\n"
 
 let rec run_all lexbuf =
   try
