@@ -16,6 +16,12 @@ make
 ./main testcases/vm/pass/fib-recur
 ```
 
+## Cleanup
+
+```
+make clean
+```
+
 ## Test cases
 
 Note, the test script isn't updated anymore because our build file has changed.
