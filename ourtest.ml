@@ -5,11 +5,8 @@ open Lexing
 open Printf
 open Typecheck
 open Normalize
-open Ast_print
-open Irc_print
 open Genir
 open Codegen
-open Vm_print
 open Vm
 
 exception Error of string
@@ -39,21 +36,19 @@ let codeGenToVm irc =
   match irc with
   | Some irc ->
     (match codeGen irc with
-    | Some cg ->
-        Some cg
-    | None ->
-	None)
+    | Some cg -> Some cg
+    | None -> printf "Codegen failed.\n"; None)
   | None -> None
 
 let runVm instr =
   match instr with
   | Some is -> run is
-  | None -> ()
+  | None -> run []
 
 let printAst ast =
   match ast with
-  | Some ast -> printf "Ast\n===\n%s" (to_string_prog ast)
-  | None -> printf "AST FAILED\n"
+  | Some ast -> ()
+  | None -> printf "Ast does not typecheck.\n"
 
 let rec run_all lexbuf =
   try
@@ -67,9 +62,16 @@ let rec run_all lexbuf =
     printf "FAIL\n"
 
 let () =
-  let filename = Sys.argv.(1) in
-  let inx = open_in filename in
-  let lexbuf = Lexing.from_channel inx in
-  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-  run_all lexbuf;
-  close_in inx
+  if Array.length Sys.argv < 2
+  then
+    (
+    printf "Usage: %s /path/to/mini/go/file\n" Sys.argv.(0);
+    let _ = exit 1 in ()
+    )
+  else
+    let filename = Sys.argv.(1) in
+    let inx = open_in filename in
+    let lexbuf = Lexing.from_channel inx in
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+    run_all lexbuf;
+    close_in inx
