@@ -228,7 +228,7 @@ let rec typecheck_params paramEnv params =
   | _::rest -> None
   | [] -> Some paramEnv
 
-let rec typecheck_fn_body env stmt rt =
+let rec typecheck_proc_body env stmt rt =
   let rec find_rt stmt =
     (match stmt with
      | Seq (l, r) ->
@@ -265,7 +265,7 @@ let typecheck_proc env proc =
         | Some (env', body', l', _) ->
             (* env with the locals merged in *)
             let new_env = add_locals_to_env l' env' in
-            (match typecheck_fn_body new_env body' ret with
+            (match typecheck_proc_body new_env body' ret with
             | Some _ -> Some (env, Proc(fn, params, ret, l', body'))
             | None -> None)
         | None -> None)
