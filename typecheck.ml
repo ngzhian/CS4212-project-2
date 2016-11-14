@@ -1,5 +1,4 @@
 open Ast
-open Printf
 open Str
 open Ast_print
 open Env
@@ -25,13 +24,11 @@ let new_name_env var env =
   result
 
 let rename_s s renames =
-  let _ = printf "rs: %s\n" (s ) in
   if RNMap.mem s renames
   then (RNMap.find s renames)
   else s
 
 let rename_exp exp renames =
-  let _ = printf "RENAME: %s\n" (to_string_exp exp) in
   let rec rn_exp exp =
     match exp with
     | And (l, r) -> And (rn_exp l, rn_exp r)

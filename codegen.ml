@@ -1,5 +1,4 @@
 open Vm
-open Printf
 open Irc
 
 (* from expression name to memory location *)

@@ -1,5 +1,4 @@
 open Ast
-open Printf
 open Irc
 
 let labelSupply = ref 1
