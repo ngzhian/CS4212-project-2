@@ -1,0 +1,13 @@
+func b() int {
+  z := 2;
+  y := 9;
+  while (z > 1) {
+      z = z - 1;
+      y := 8
+  };
+  return y
+}
+{
+  y := b();
+  print y
+}

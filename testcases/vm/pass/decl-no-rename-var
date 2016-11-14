@@ -1,8 +1,7 @@
 func a() int {
   z := 3;
   if (true) {
-    z := 7;
-    z = 2 + z;
+    z := 6 + z;
     return z
   } else {
     return z

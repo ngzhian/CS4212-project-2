@@ -1,5 +1,5 @@
 func a() int {
-    return 1
+    return 3
 }
 func b(x int) int {
     y := 2;
@@ -12,6 +12,6 @@ func c(x int) int {
     x := a();
     y := b(1);
     z := c(1);
-    x = (7 + c(8)) + b(9);
+    x = (10 - c(4)) + b(4);
     print x
 }

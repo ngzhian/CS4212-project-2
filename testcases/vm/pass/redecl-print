@@ -1,7 +1,7 @@
 func a() int {
-  z := 9;
+  z := 7;
   if (true) {
-    z := 7;
+    z := 9;
     print z
   } else {
     z := 6;
@@ -10,6 +10,5 @@ func a() int {
   return z
 }
 {
-  x := a();
-  print x
+  x := a()
 }
