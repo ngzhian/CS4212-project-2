@@ -257,7 +257,7 @@ let typecheck_proc env proc =
             (* env with the locals merged in *)
             let new_env = add_locals_to_env l' env' in
             (match typecheck_fn_body new_env body' ret with
-            | Some _ -> Some (env, Proc(fn, params, ret, l', body'))
+            | Some _ -> Some (env, Proc(fn, params, ret, l', rn(body')))
             | None -> None)
         | None -> None)
      | None -> None)
@@ -288,7 +288,48 @@ let typecheck (Prog (procs, _, stmt)) =
     (match typecheck_procs init_env procs with
      | Some (newEnv, ty_procs) ->
        (match typecheck_stmt newEnv stmt (Locals []) with
-        | Some (_, ty_stmt, ls) -> Some (Prog (ty_procs, ls, ty_stmt))
+        | Some (_, ty_stmt, ls) -> Some (Prog (ty_procs, ls, rn(ty_stmt)))
         | None -> None)
      | None -> None)
   | None -> None
+
+
+module RNMap = Map.Make(String);;
+let renamemap = RNMap.empty;;
+
+let rn stmt = rename stmt renamemap []
+let rename stmt renamemap locals =
+
+match stmt with
+	| Seq s1 s2 ->
+		let s1', l', renamemap'  = rename s1 renamemap locals in
+		let s2', l'', renamemap''  = rename s2 renamemap' locals in
+		(Seq (s1', s2'), renamemap, locals)
+	| Assign x v ->
+	if RNMap.find x renamemap then
+	(Assign renamemap.get x , v, locals, renamemap)
+	else (Assign (x, v), renamemap, locals)
+
+| Var x v ->
+   if RNMap.find x renamemap then
+   (Var renamemap.get x , v, locals, renamemap)
+	 else (Var (x, v), renamemap, locals)
+
+| Decl ty x v ->
+   match lu locals x with
+   | Some z ->
+       let x' = newname x in
+       let newrenamemap = RNMap.add x x' renamemap in
+       (Decl ty x' v, newrenamemap, locals)
+   | None ->
+     let l' = (x, ty)::locals in
+     (Decl (ty, x, v), renamemap, l')
+
+| While e s ->
+   let s', locals, renamemap' = rename s in
+   (While e s', locals, renamemap)
+   
+| ITE t, _ s1, _, s2 ->
+   let s1', l', renamemap'  = rename s1 renamemap in
+   let s2', l'', renamemap''  = rename s2 renamemap in
+   (ITE t, _, s1', _, s2', l'', renamemap)

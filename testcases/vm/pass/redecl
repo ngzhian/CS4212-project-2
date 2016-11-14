@@ -1,0 +1,13 @@
+func a(x int) int {
+  z := 9;
+  y := 4;
+  while (y > 3) {
+    y = y - 1;
+    z := 7
+  };
+  return z
+}
+{
+  x := a(1);
+  print x
+}

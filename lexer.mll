@@ -20,7 +20,6 @@ let letter = ['a'-'z']
 let vars = letter (digit|letter)*
 (* Technically, name can only contain letters, but we leave this
  * to the type checker in order to simplify parsing.
- * TODO: check for name validity in parsing step
  * *)
 let name = letter (digit|letter)*
 let white = [' ' '\t']
