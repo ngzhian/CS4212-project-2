@@ -8,10 +8,14 @@ then
     PASS=./testcases/typecheck/pass/*
     FAIL=./testcases/typecheck/fail/*
     echo "Typechecking..."
-else
+elif [[ "$1" == "-p" ]]
+then
     PASS=./testcases/parsing/pass/*
     FAIL=./testcases/parsing/fail/*
     echo "Check parsing..."
+else
+    PASS=./testcases/vm/pass/*
+    echo "Check vm..."
 fi
 
 # f=./testcases/typecheck/scope
