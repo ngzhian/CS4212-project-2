@@ -147,7 +147,8 @@ let dec r = r := !r - 1
 
 
 let singleStep id mem memLock t =
-  let _ = printf "%s\n" (string_of_thread t) in
+  (* uncomment to debug *)
+  (* let _ = printf "%s\n" (string_of_thread t) in *)
   match (List.nth t.code !(t.pc)) with
   | Halt ->   true
   | PushS i -> t.stack.(!(t.sp)) <- i;
