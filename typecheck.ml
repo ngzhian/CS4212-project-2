@@ -117,7 +117,7 @@ let rec typecheck_stmt (env : env) stmt locals renames = match stmt with
      | Some (e2, st, l', rn') ->
        (match typecheck_stmt e2 s2 l' rn' with
         | None -> None
-        | Some (e3, st', l'', rn'') -> Some (env, Seq (st, st'), l'', rn'')))
+        | Some (e3, st', l'', rn'') -> Some (e3, Seq (st, st'), l'', rn'')))
   | Go s ->
     (match (typecheck_stmt (new_block env) s locals renames) with
      | Some (_, s', l', _) -> Some (env, s', l', renames)
