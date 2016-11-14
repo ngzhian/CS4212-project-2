@@ -1,5 +1,5 @@
-func foo() int {
-    return true
+func foo() {
+    return 1
 }
 {
     foo()
