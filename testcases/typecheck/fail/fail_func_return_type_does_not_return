@@ -1,0 +1,6 @@
+func foo() int {
+    print 1
+}
+{
+    foo()
+}

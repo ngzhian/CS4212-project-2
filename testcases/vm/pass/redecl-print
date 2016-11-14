@@ -1,0 +1,15 @@
+func a() int {
+  z := 9;
+  if (true) {
+    z := 7;
+    print z
+  } else {
+    z := 6;
+    print z
+  };
+  return z
+}
+{
+  x := a();
+  print x
+}

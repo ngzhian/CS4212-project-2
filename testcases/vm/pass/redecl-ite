@@ -1,0 +1,12 @@
+func c(x int) int {
+  x := 2;
+  if (x > 1) {
+      return 1
+  } else {
+      return 0
+  }
+}
+{
+  z := c(0);
+  print z
+}
