@@ -16,6 +16,7 @@ then
 else
     PASS=./testcases/vm/pass/*
     echo "Check vm..."
+    echo "All the output should be 9"
 fi
 
 # f=./testcases/typecheck/scope
