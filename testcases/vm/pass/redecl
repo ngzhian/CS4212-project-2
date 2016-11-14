@@ -1,13 +1,24 @@
-func a(x int) int {
+func a() int {
   z := 9;
-  y := 4;
-  while (y > 3) {
-    y = y - 1;
+  if (true) {
     z := 7
+  } else {
+    z := 8
   };
   return z
 }
+func b() int {
+  z := 2;
+  y := 9;
+  while (z > 1) {
+      z = z - 1;
+      y := 8
+  };
+  return y
+}
 {
-  x := a(1);
-  print x
+  x := a();
+  y := b();
+  print x;
+  print y
 }

@@ -1,3 +1,9 @@
 {
-    x := !false
+    x := !false;
+    if (x) {
+        y := 9
+    } else {
+        y := 8
+    };
+    print y
 }
