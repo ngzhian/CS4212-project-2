@@ -27,6 +27,7 @@ open Ast
 %left GT                /* lowest precedence */
 %left PLUS MINUS        /* lowest precedence */
 %left TIMES DIV         /* medium precedence */
+%left SEMICOLON
 
 %start main             /* the entry point */
 %type <Ast.prog> main
@@ -110,7 +111,4 @@ dtype:
     INTTYPE { TyInt }
   | BOOLTYPE { TyBool }
   | CHANINTTYPE { TyChan(TyInt) }
-;
-vars:
-    VARS { Var($1) }
 ;
