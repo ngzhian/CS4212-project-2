@@ -229,23 +229,25 @@ let rec typecheck_params paramEnv params =
   | [] -> Some paramEnv
 
 let rec typecheck_fn_body env stmt rt =
-  (match stmt with
-   | Seq (l, r) ->
-       (match typecheck_fn_body env l rt with
-        | Some e' -> typecheck_fn_body e' r rt
-        | None -> None)
-   | Go g -> typecheck_fn_body env g rt
-   | While (_, _, s) -> typecheck_fn_body env s rt
-   | ITE (_, _, l, _, r) ->
-       (match typecheck_fn_body env l rt with
-        | Some e' -> typecheck_fn_body e' r rt
-        | None -> None)
-   | Transmit _ | RcvStmt _ | FuncCall _ | Skip
-   | Decl _ | DeclChan _ | Assign _ | Print _ -> Some env
-   | Return x -> (
-       let xt = infer_ty_exp env x in
-       if xt = rt then Some env else None)
-   )
+  let rec find_rt stmt =
+    (match stmt with
+     | Seq (l, r) ->
+         (match find_rt l with
+          | None -> find_rt r
+          | ty -> ty)
+     | Go g -> find_rt g
+     | While (_, _, s) -> find_rt s
+     | ITE (_, _, l, _, r) ->
+         (match find_rt l with
+          | None -> find_rt r
+          | ty -> ty)
+     | Transmit _ | RcvStmt _ | FuncCall _ | Skip
+     | Decl _ | DeclChan _ | Assign _ | Print _ -> None
+     | Return x -> infer_ty_exp env x) in
+  match find_rt stmt , rt with
+  | Some x, Some rt -> if eq_ty x rt then Some env else None
+  | None, None -> Some env
+  | _ -> None
 
 (* Type checks a proc and its body.
  * Type checks all params, then type checks body with the params env
