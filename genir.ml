@@ -8,8 +8,7 @@ let freshLabel _ =  labelSupply := !labelSupply + 1;
 let freshName _ =  labelSupply := !labelSupply + 1;
   String.concat "" ["genirc" ; string_of_int (!labelSupply )]
 
-let currentLocals = ref []
-let localNames l = match l with
+let local_names l = match l with
   | Locals s -> List.map (fun (x, _) -> x) s
 
 module Symtable = Map.Make(String);;
@@ -17,24 +16,17 @@ let symtable = ref Symtable.empty
 
 let lookup name =
   Symtable.find name !symtable
-  (* let rec lu name t = *)
-  (*   match t with *)
-  (*   | SymTable [] -> failwith (sprintf "symbol %s not found" name) *)
-  (*   | SymTable ((n, l)::ss) -> if n = name then l else lu name (SymTable ss) *)
-  (* in lu name symtable *)
 
 let insertSym name label =
   symtable := Symtable.add name label !symtable
-  (* match symtable with *)
-  (*   | SymTable ss -> SymTable ((name, label)::ss) *)
 
 (* (parts) of translation of Booleans (short-circuit evaluation!),
    yields a tuple where first component represents the IRC and
    second component a variable name which is bound to the result *)
-let rec translateB exp = match exp with
+let rec translateB locals exp = match exp with
   | And (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     let l1 = freshLabel() in
     let l2 = freshLabel() in
@@ -49,48 +41,48 @@ let rec translateB exp = match exp with
       IRC_Label l2],
      x)
   | Eq (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
       @ [IRC_Assign (x, IRC_Eq (place1, place2))]
     , x)
   | Gt (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
       @ [IRC_Assign (x, IRC_Gt (place1, place2))]
     , x)
   | Plus (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
       @ [IRC_Assign (x, IRC_Plus (place1, place2))]
     , x)
   | Minus (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
       @ [IRC_Assign (x, IRC_Minus (place1, place2))]
     , x)
   | Times (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
       @ [IRC_Assign (x, IRC_Times (place1, place2))]
     , x)
   | Division (e1, e2) ->
-    let code1, place1 = translateB e1 in
-    let code2, place2 = translateB e2 in
+    let code1, place1 = translateB locals e1 in
+    let code2, place2 = translateB locals e2 in
     let x = freshName() in
     ( code1
       @ code2
@@ -98,7 +90,7 @@ let rec translateB exp = match exp with
     , x)
   | Not e ->
     let x = freshName() in
-    let code, place = translateB e in
+    let code, place = translateB locals e in
     ( code
       @ [IRC_Assign (x, IRC_Not place)]
     , x)
@@ -110,11 +102,11 @@ let rec translateB exp = match exp with
     ([IRC_Assign (x, IRC_IConst 0)], x)
   | Var v ->
       let x = freshName() in
-    ([IRC_Assign (x, IRC_Local(v, !currentLocals))], x)
+    ([IRC_Assign (x, IRC_Local(v, locals))], x)
   | FuncExp (f, ps) ->
     let x = freshName() in
     let n = List.length ps in
-    let t' = List.map translateB ps in
+    let t' = List.map (translateB locals) ps in
     let places = List.map (fun t -> [IRC_Param (snd t)]) t' in
     let codes = List.map fst t' in
     let placesgen = List.fold_left (@) [] places in
@@ -125,28 +117,28 @@ let rec translateB exp = match exp with
       , x)
   | RcvExp _ -> ([],"")
 
-let rec translateStmt stmt = match stmt with
+let rec translateStmt locals stmt = match stmt with
   | Seq (s1, s2) ->
-      let c1 = translateStmt s1 in
-      let c2 = translateStmt s2 in
+      let c1 = translateStmt locals s1 in
+      let c2 = translateStmt locals s2 in
       (c1 @ c2)
   | Go _ -> ([])
   | Transmit _ -> ([])
   | RcvStmt _ -> ([])
   | Decl (ty, n, e) ->
-      let code, place = translateB e in
+      let code, place = translateB locals e in
       (code
-      @ [IRC_AssignLocal (n, IRC_Var place, !currentLocals)])
+      @ [IRC_AssignLocal (n, IRC_Var place, locals)])
   | DeclChan _ -> ([])
   | Assign (n, e) ->
-      let code, place = translateB e in
-      (code @ [IRC_AssignLocal (n, IRC_Var place, !currentLocals)])
+      let code, place = translateB locals e in
+      (code @ [IRC_AssignLocal (n, IRC_Var place, locals)])
   | While (e, l, s) ->
       let beg = freshLabel() in
       let body = freshLabel() in
       let exit = freshLabel() in
-      let ecode, eplace = translateB e in
-      let scode = translateStmt s in
+      let ecode, eplace = translateB locals e in
+      let scode = translateStmt locals s in
       ( [IRC_Label beg]             (* begin:     *)
       @ ecode                       (*   e.code   *)
       @ irc_ZeroJump (eplace, exit) (*   jez exit *)
@@ -158,9 +150,9 @@ let rec translateStmt stmt = match stmt with
   | ITE (e, s1, t, s2, f) ->
       let bfalse = freshLabel () in
       let exit = freshLabel () in
-      let ecode, eplace = translateB e in
-      let tcode = translateStmt t in
-      let fcode = translateStmt f in
+      let ecode, eplace = translateB locals e in
+      let tcode = translateStmt locals t in
+      let fcode = translateStmt locals f in
       ( ecode                         (*   e.code     *)
       @ irc_ZeroJump (eplace, bfalse) (*   jez bfalse *)
       @ tcode                         (*   t.code     *)
@@ -170,7 +162,7 @@ let rec translateStmt stmt = match stmt with
       @ [IRC_Label exit]              (* exit:        *)
       )
   | Return e ->
-      let ecode, eplace = translateB e in
+      let ecode, eplace = translateB locals e in
       (ecode)
   | FuncCall (fn, ps) ->
       (* e.g. f(a, b, c) *)
@@ -181,7 +173,7 @@ let rec translateStmt stmt = match stmt with
       (* IRC_Param t2 *)
       (* IRC_Param t3 *)
       (* IRC_Call x 3 where x is the label of function *)
-      let codes, places = List.split (List.map translateB ps) in (* evaluate all the params *)
+      let codes, places = List.split (List.map (translateB locals) ps) in (* evaluate all the params *)
       (* all the code needed to evaluate arguments *)
       (List.concat codes)
       (* save the place we can find the evaluated arguments *)
@@ -191,7 +183,7 @@ let rec translateStmt stmt = match stmt with
       (* call the function by label, we should have this value after walking the proc list *)
       @ [IRC_Call (lookup fn, List.length ps)]
   | Print exp ->
-      let code, place = translateB exp in
+      let code, place = translateB locals exp in
       (
         code
         @
@@ -202,10 +194,9 @@ let rec translateStmt stmt = match stmt with
 let translateProc proc =
   match proc with
   | Proc (n, params, ty, locals, stmt) ->
-      let _ = currentLocals := localNames locals in
       let fnl = freshLabel() in
       let _ = insertSym n fnl in
-      let tm = translateStmt stmt in
+      let tm = translateStmt (local_names locals) stmt in
       (* activation record *)
       (
         [IRC_Label fnl]
@@ -227,13 +218,11 @@ let translate prog =
         (List.map
         (fun p ->
           let ps = translateProc p in
-          let _ = currentLocals := [] in (* reset locals *)
           ps)
         procs) in
-      let _ = currentLocals := localNames l in
       (* need to make rte space for local vars in main proc *)
-      let initLocals = List.map (fun l -> IRC_PushE 0) !currentLocals in
-      let translatedStmt = translateStmt stmt in
+      let initLocals = List.map (fun l -> IRC_PushE 0) (local_names l) in
+      let translatedStmt = translateStmt (local_names l) stmt in
       let x = freshLabel () in
       IRC (
         [IRC_Goto x]

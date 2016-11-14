@@ -16,6 +16,9 @@ and irc_cmd = IRC_Assign of string * irc_exp
             | IRC_PushE of int
             | IRC_PopE
             | IRC_Print of string
+            (*
+            | IRC_Proc of string * string list * irc_cmd list
+            make this work *)
 
 and irc_exp = IRC_And of string * string
             | IRC_Eq of string * string

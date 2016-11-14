@@ -4,17 +4,15 @@ open Irc
 
 (* from expression name to memory location *)
 module Memory = Map.Make(String);;
-module Labels = Map.Make(struct type t = int let compare = compare end)
-
 let memory = ref Memory.empty;;
+let mem_loc = ref 0
+let new_mem _ =  mem_loc := !mem_loc + 1; !mem_loc
+
+module Labels = Map.Make(struct type t = int let compare = compare end)
 let labels = ref Labels.empty;;
 
-let memLoc = ref 0
-let upMem _ =  memLoc := !memLoc + 1; !memLoc
-let downMem =  memLoc := !memLoc - 1
-
-
-let localRelPos name locals =
+(* calculate relative position of a local variable in the RTE *)
+let local_rel_pos name locals =
   let rec indexOf name locals c =
     match locals with
     | [] -> -1
@@ -33,8 +31,8 @@ let codeGenIrcExp exp =
   | IRC_Not v -> [ Vm.PushS 0; Vm.Eq ] (* equivalent to v == 0 *)
   | IRC_IConst i -> [ Vm.PushS i ]
   | IRC_Local (name, locals) ->
-      let m = upMem () in
-      let relpos = localRelPos name locals in
+      let m = new_mem () in
+      let relpos = local_rel_pos name locals in
       (* push from rte to stack *)
       [
         Vm.AssignMemFromEnv (relpos, m);
@@ -49,9 +47,9 @@ let codeGenIrcCmd cmd ic =
   (* updating a local variable *)
   | IRC_AssignLocal (name, exp, locals) ->
       (* get a fresh memory location *)
-      let m = upMem () in
+      let m = new_mem () in
       (* find the relative position of this local variable in the RTE activation record *)
-      let relpos = localRelPos name locals in
+      let relpos = local_rel_pos name locals in
       codeGenIrcExp exp
       @
       [
@@ -93,7 +91,7 @@ let codeGenIrcCmd cmd ic =
 
       (* todo *)
   | IRC_Return _ ->
-      let m = upMem () in
+      let m = new_mem () in
       [
         (* my return address is stored in RTE, copy it to mem *)
         AssignMemFromEnv (1, m);
@@ -104,7 +102,7 @@ let codeGenIrcCmd cmd ic =
       ]
       (* todo *)
   | IRC_Get name ->
-      let m = upMem () in
+      let m = new_mem () in
       let _ = memory := Memory.add name m !memory in
       [
         AssignMemFromEnv (3 (* todo get relpos of local *), m);
