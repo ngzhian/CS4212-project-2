@@ -205,8 +205,5 @@ depend: .depend
 
 include .depend
 
-test-parser-only:
+test::
 	./test.sh
-test-typecheck-only:
-	./test.sh -t
-test:: test-parser-only test-typecheck-only
