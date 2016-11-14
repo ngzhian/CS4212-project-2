@@ -1,56 +1,36 @@
 open Ast
+open Printf
 open Str
 open Ast_print
+open Env
 
-(* the type env is a list of function signature
- * and a list of context (vars and their types) *)
-type env = Env of ((string * types) list) list
+let (>>=) m f = match m with
+| Some x -> f x
+| None -> None
 
-let rec env_to_string (Env ps) =
-  List.map
-  (fun s -> (
-    String.concat "," (List.map (fun (s, ty) -> s ^ (to_string_type ty)) s))) ps
-  |> String.concat "|"
+module RNMap = Map.Make(String);;
+let empty_renames = RNMap.empty
 
-(* enters a new scope *)
-let new_block (Env lst) =
-  match lst with
-  | [] -> Env ([])
-  | xs -> Env ([]::xs)
+(* tries to get a new name for a variable that does not occur in env
+ * x0, x1, ...
+ * *)
+let new_name_env var env =
+  let x = ref 0 in
+  let rec gen var =
+    match lookup env var with
+    | None -> var
+    | Some _ -> x := !x + 1; gen (var ^ (string_of_int !x))
+  in
+  let result = gen var in
+  result
 
-(* Add binding v : t to environment *)
-let add v t (Env lst) =
-  match lst with
-  | [] -> Env ([[(v,t)]])
-  | x::xs -> Env (((v,t)::x)::xs)
-
-let add_locals_to_env (Locals l) env =
- List.fold_left (fun env (n, ty) -> add n ty env) (new_block env) l
-
-let init_env () = Env []
-
-let lu lst var =
-  try
-    (Some (snd (List.find (fun (el2,_) -> var = el2) lst)))
-  with
-  | Not_found -> None
-
-(* Lookup the type of a var only in the immediate environment *)
-let lookup_immd (Env lst) var = match lst with
-  | [] -> None
-  | []::xs -> None
-  | l::xs -> lu l var
-
-(* Lookup the type of a var in the environment *)
-let rec lookup (Env lst) var =
-  match lst with
-  | [] -> None
-  | x::xs ->
-    (match lu x var with
-    | None -> lookup (Env xs) var
-    | result -> result)
-
-let merge_env (Env a) (Env b) = Env (a@b)
+let rec rename_exp exp renamemap =
+  match exp with
+  | Var x ->
+      if RNMap.mem x renamemap
+      then Var (RNMap.find x renamemap)
+      else Var x
+  | e -> e
 
 (* equality among types *)
 let rec eq_ty t1 t2 = match (t1,t2) with
@@ -72,6 +52,7 @@ let rec both_int mt1 mt2 = match (mt1, mt2) with
   | (Some TyInt, Some TyInt) -> Some TyInt
   | _ -> None
 
+(* check that the inferred params types match the declared params types in func def *)
 let rec params_match inferred declared =
   match (inferred, declared) with
   | [], [] -> true
@@ -115,78 +96,90 @@ let rec infer_ty_exp env e =
 (* Implementation of G | (stmt : Cmd | G) where we simply skip Cmd and as above
    use 'option' to report failure
 *)
-let rec typecheck_stmt (env : env) stmt locals = match stmt with
-  | Skip -> Some (env, stmt, locals)
+let rec typecheck_stmt (env : env) stmt locals renames = match stmt with
+  | Skip -> Some (env, stmt, locals, renames)
   | Seq (s1, s2) ->
-    (match typecheck_stmt env s1 locals with
+    (match typecheck_stmt env s1 locals renames with
      | None -> None
-     | Some (e2, st, l') ->
-       (match typecheck_stmt e2 s2 l' with
+     | Some (e2, st, l', rn') ->
+       (match typecheck_stmt e2 s2 l' rn' with
         | None -> None
-        | Some (e3, st', l'') -> Some (env, Seq (st, st'), l'')))
+        | Some (e3, st', l'', rn'') -> Some (env, Seq (st, st'), l'', rn'')))
   | Go s ->
-    (match (typecheck_stmt (new_block env) s locals) with
-     | Some (_, s', l') -> Some (env, s', l')
+    (match (typecheck_stmt (new_block env) s locals renames) with
+     | Some (_, s', l', _) -> Some (env, s', l', renames)
      | None -> None)
   | Transmit (ch, e) as st ->
     (match (lookup env ch) with
      | Some (TyChan _) ->
        (* according to tips, e should always be an int *)
        (match infer_ty_exp env e with
-        | Some TyInt -> Some (env, st, locals)
+        | Some TyInt -> Some (env, st, locals, renames)
         | _ -> None)
      | _ -> None)
   | RcvStmt ch as st ->
     (match (lookup env ch) with
-     | Some (TyChan t1) -> Some (env, st, locals)
+     | Some (TyChan t1) -> Some (env, st, locals, renames)
      | _ -> None)
   | Decl (_, v, e) ->
     (* allow redeclaration when moving into nested block *)
     (match (lookup_immd env v) with
      | None -> (
-         match (infer_ty_exp env e) with
-         | Some ty -> Some (add v ty env, Decl (Some ty, v, e), add_local v ty locals)
-         | _ -> None
-       )
+       (* if this name is used somewhere in the env, need to rename *)
+       let v', rn' =
+         (match (lookup env v) with
+          | None -> v, renames
+          | Some ty -> let v' = new_name_env v env in (v', RNMap.add v v' renames)) in
+       match (infer_ty_exp env e) with
+       | Some ty ->
+           let env' = add v' ty env in
+           let locals' = add_local v' ty locals in
+           let decl = Decl (Some ty, v', rename_exp e rn') in
+           Some (env', decl, locals', rn')
+       | _ -> None)
      | Some _ -> None)
   | DeclChan v as st ->
-    Some (add v (TyChan TyInt) env, st, add_local v (TyChan TyInt) locals)
-  | Assign (v,e) as st ->
+    Some (add v (TyChan TyInt) env, st, add_local v (TyChan TyInt) locals, renames)
+  | Assign (v,e) ->
     (match (lookup env v) with
      | None -> None (* Unknown variable *)
      | Some t1 -> let t2 = infer_ty_exp env e in
        (match t2 with
         | None -> None
-        | Some t3 -> if eq_ty t1 t3 then Some (env, st, locals) else None))
+        | Some t3 ->
+            if eq_ty t1 t3
+            then Some (env, Assign(v, rename_exp e renames), locals, renames)
+            else None))
   | While (e, _, s) ->
     (match (infer_ty_exp env e) with
      | Some TyBool ->
-       (match typecheck_stmt (new_block env) s locals with
-        | Some (_, s', l') -> Some (env, While (e, l', s'), l')
+       (match typecheck_stmt (new_block env) s locals renames with
+        | Some (_, s', l', _) -> Some (env, While (e, l', s'), l', renames)
         | None -> None)
      | _ -> None)
   | ITE (e, _, s1, _, s2) ->
+    (* note the locals in the 2 clauses are collected *)
     (match (infer_ty_exp env e) with
      | Some TyBool ->
-         (match typecheck_stmt (new_block env) s1 locals with
+         (match typecheck_stmt (new_block env) s1 locals renames with
          | None -> None
-         | Some (_, s1', l') ->
-             (match typecheck_stmt (new_block env) s2 l' with
+         | Some (_, s1', l', _) ->
+             (match typecheck_stmt (new_block env) s2 l' renames with
              | None -> None
-             | Some (_, s2', l'')->
-                 Some (env, ITE (e, l', s1', l'', s2'), l'')))
+             | Some (_, s2', l'', _)->
+                 Some (env, ITE (e, l', s1', l'', s2'), l'', renames)))
      | _ -> None)
   | Return e as st ->
     (match infer_ty_exp env e with
      | None -> None
-     | Some _ -> Some (env, st, locals))
+     | Some _ -> Some (env, st, locals, renames))
   | FuncCall (v, ps) as st ->
     (match (lookup env v) with
      | Some (TyFunc (params, _)) ->
        let inferred = List.map (infer_ty_exp env) ps in
-       if params_match inferred params then Some (env, st, locals) else None
+       if params_match inferred params then Some (env, st, locals, renames) else None
      | _ -> None)
-  | Print e as st -> Some (env, st, locals)
+  | Print e as st -> Some (env, st, locals, renames)
 
 (* TODO invalid function name *)
 let collect_fn env proc = match proc with
@@ -252,12 +245,12 @@ let typecheck_proc env proc =
      match typecheck_params emptyEnv params with
      | Some paramsEnv ->
        (* type check stmt with paramsEnv containing params *)
-       (match typecheck_stmt (merge_env paramsEnv env) body (Locals []) with
-        | Some (env', body', l') ->
+       (match typecheck_stmt (new_block (merge_env paramsEnv env)) body (Locals []) empty_renames with
+        | Some (env', body', l', _) ->
             (* env with the locals merged in *)
             let new_env = add_locals_to_env l' env' in
             (match typecheck_fn_body new_env body' ret with
-            | Some _ -> Some (env, Proc(fn, params, ret, l', rn(body')))
+            | Some _ -> Some (env, Proc(fn, params, ret, l', body'))
             | None -> None)
         | None -> None)
      | None -> None)
@@ -281,55 +274,13 @@ let (>>=) a b = match a with
 | None -> None
 
 (* Top level type checker for the entire prog *)
-(* might want to consider threading the locals instead of doing collecting at the top level *)
 let typecheck (Prog (procs, _, stmt)) =
   match collect_fns (init_env ()) procs with
   | Some init_env ->
     (match typecheck_procs init_env procs with
      | Some (newEnv, ty_procs) ->
-       (match typecheck_stmt newEnv stmt (Locals []) with
-        | Some (_, ty_stmt, ls) -> Some (Prog (ty_procs, ls, rn(ty_stmt)))
+       (match typecheck_stmt newEnv stmt (Locals []) empty_renames with
+        | Some (_, ty_stmt, ls, _) -> Some (Prog (ty_procs, ls, ty_stmt))
         | None -> None)
      | None -> None)
   | None -> None
-
-
-module RNMap = Map.Make(String);;
-let renamemap = RNMap.empty;;
-
-let rn stmt = rename stmt renamemap []
-let rename stmt renamemap locals =
-
-match stmt with
-	| Seq s1 s2 ->
-		let s1', l', renamemap'  = rename s1 renamemap locals in
-		let s2', l'', renamemap''  = rename s2 renamemap' locals in
-		(Seq (s1', s2'), renamemap, locals)
-	| Assign x v ->
-	if RNMap.find x renamemap then
-	(Assign renamemap.get x , v, locals, renamemap)
-	else (Assign (x, v), renamemap, locals)
-
-| Var x v ->
-   if RNMap.find x renamemap then
-   (Var renamemap.get x , v, locals, renamemap)
-	 else (Var (x, v), renamemap, locals)
-
-| Decl ty x v ->
-   match lu locals x with
-   | Some z ->
-       let x' = newname x in
-       let newrenamemap = RNMap.add x x' renamemap in
-       (Decl ty x' v, newrenamemap, locals)
-   | None ->
-     let l' = (x, ty)::locals in
-     (Decl (ty, x, v), renamemap, l')
-
-| While e s ->
-   let s', locals, renamemap' = rename s in
-   (While e s', locals, renamemap)
-   
-| ITE t, _ s1, _, s2 ->
-   let s1', l', renamemap'  = rename s1 renamemap in
-   let s2', l'', renamemap''  = rename s2 renamemap in
-   (ITE t, _, s1', _, s2', l'', renamemap)
