@@ -12,6 +12,8 @@ make
 
 ## Running
 
+There are test cases that work correctly in `testcases/vm/pass/`, you can run them like so:
+
 ```
 ./main testcases/vm/pass/fib-recur
 ```
