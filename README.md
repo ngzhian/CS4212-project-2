@@ -2,6 +2,12 @@
 
 Compiler for mini-go!
 
+Members:
+
+    1. Ng Zhi An
+    2. Victor Hazali
+    3. Vishnu Prem
+
 ## Compile
 
 Uses make to build the compiler, which will output a binary named `main` in the current directory.
